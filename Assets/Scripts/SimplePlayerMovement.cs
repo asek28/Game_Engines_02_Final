@@ -16,6 +16,7 @@ public class SimplePlayerMovement : MonoBehaviour
     private CharacterController controller;
     private Vector3 velocity;
     private bool isRunning;
+    private Vector2 currentMoveInput;
     
     void Start()
     {
@@ -34,13 +35,15 @@ public class SimplePlayerMovement : MonoBehaviour
         // Get input using Input System
         float rotationInput = 0f;
         float forwardInput = 0f;
+        float horizontalInput = 0f;
         bool sprintPressed = false;
         
         var keyboard = Keyboard.current;
         if (keyboard != null)
         {
-            rotationInput = (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0);
+            rotationInput = (keyboard.rightArrowKey.isPressed ? 1 : 0) - (keyboard.leftArrowKey.isPressed ? 1 : 0);
             forwardInput  = (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0);
+            horizontalInput = (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0);
             sprintPressed = keyboard.leftShiftKey.isPressed;
         }
         else
@@ -50,15 +53,21 @@ public class SimplePlayerMovement : MonoBehaviour
         
         // Camera-relative basis
         Vector3 moveDirection = transform.forward;
+        Vector3 strafeDirection = transform.right;
         bool hasCameraDirection = false;
         if (useCameraDirection && Camera.main != null && Mathf.Abs(rotationInput) <= 0.01f)
         {
             Transform cam = Camera.main.transform;
             Vector3 camForward = Vector3.ProjectOnPlane(cam.forward, Vector3.up).normalized;
+            Vector3 camRight = Vector3.ProjectOnPlane(cam.right, Vector3.up).normalized;
             if (camForward.sqrMagnitude > 0.001f)
             {
                 moveDirection = camForward;
                 hasCameraDirection = true;
+            }
+            if (camRight.sqrMagnitude > 0.001f)
+            {
+                strafeDirection = camRight;
             }
         }
 
@@ -74,9 +83,11 @@ public class SimplePlayerMovement : MonoBehaviour
         }
         
         // Create movement vector (strafe + forward)
-        Vector3 move = moveDirection * forwardInput;
+        Vector3 move = (moveDirection * forwardInput) + (strafeDirection * horizontalInput);
         if (move.sqrMagnitude > 1f) move.Normalize();
         
+        currentMoveInput = new Vector2(horizontalInput, forwardInput);
+
         // Determine speed
         float currentSpeed = sprintPressed ? runSpeed : walkSpeed;
         
@@ -94,25 +105,13 @@ public class SimplePlayerMovement : MonoBehaviour
         }
         
         
-        isRunning = sprintPressed && Mathf.Abs(forwardInput) > 0.1f;
-        
-        
-        if (Mathf.Abs(forwardInput) > 0.1f || Mathf.Abs(rotationInput) > 0.1f)
-        {
-            Debug.Log($"Simple Movement - Forward: {forwardInput}, Rotation: {rotationInput}, Speed: {currentSpeed}, Sprint: {sprintPressed}");
-        }
+        isRunning = sprintPressed && move.sqrMagnitude > 0.1f;
     }
     
     // AnimationController
     public bool IsMoving()
     {
-        var keyboard = Keyboard.current;
-        if (keyboard != null)
-        {
-            float forwardInput = (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0);
-            return Mathf.Abs(forwardInput) > 0.1f;
-        }
-        return false;
+        return currentMoveInput.sqrMagnitude > 0.1f;
     }
     
     public bool IsRunning()
