@@ -117,7 +117,7 @@ public class Loot : MonoBehaviour
             return;
         }
 
-        Scrap scrap = new Scrap(itemDisplayName, scrapValue);
+        Scrap scrap = new Scrap(itemId, itemDisplayName, scrapValue);
         InventoryManager.instance.AddScrap(scrap);
         
         // Nesneyi tamamen yok et

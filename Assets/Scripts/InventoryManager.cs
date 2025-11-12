@@ -13,6 +13,8 @@ public class InventoryManager : MonoBehaviour
     public GameObject itemPrefab;
     public TextMeshProUGUI moneyText;
     public Canvas inventoryCanvas;
+    [Tooltip("Parent transform containing ItemSlot GameObjects (e.g., InventorySlots).")]
+    public Transform inventorySlotsParent;
     [Tooltip("Optional root panel RectTransform that should stretch to the canvas size.")]
     public RectTransform inventoryRootPanel;
     [Tooltip("Behaviours (e.g. camera controllers) to disable while inventory is open.")]
@@ -27,6 +29,7 @@ public class InventoryManager : MonoBehaviour
     public int money;
 
     private readonly List<ScrapData> collectedScraps = new List<ScrapData>();
+    private readonly Dictionary<string, ItemSlot> itemSlots = new Dictionary<string, ItemSlot>();
     private bool isInventoryVisible = true;
     private float cachedTimeScale = 1f;
     [SerializeField] private bool pauseWhenOpen = true;
@@ -52,6 +55,7 @@ public class InventoryManager : MonoBehaviour
     {
         ConfigureCanvas();
         CacheCameraOrbit();
+        CacheItemSlots();
 
         UpdateMoneyUI();
         RefreshInventoryUI();
@@ -72,8 +76,15 @@ public class InventoryManager : MonoBehaviour
             Debug.LogWarning("InventoryManager: Scrap name is empty. The item will still be added but consider providing a valid name.");
         }
 
-        ScrapData data = new ScrapData(scrap.Name, scrap.Value);
+        ScrapData data = new ScrapData(scrap.ItemId, scrap.Name, scrap.Value);
         collectedScraps.Add(data);
+
+        // Update ItemSlot count if it exists
+        if (!string.IsNullOrWhiteSpace(scrap.ItemId) && itemSlots.TryGetValue(scrap.ItemId, out ItemSlot slot))
+        {
+            slot.AddCount(1);
+        }
+
         RefreshInventoryUI();
     }
 
@@ -156,13 +167,42 @@ public class InventoryManager : MonoBehaviour
     [System.Serializable]
     public struct ScrapData
     {
+        public string itemId;
         public string name;
         public int value;
 
-        public ScrapData(string name, int value)
+        public ScrapData(string itemId, string name, int value)
         {
+            this.itemId = string.IsNullOrWhiteSpace(itemId) ? "unknown" : itemId;
             this.name = string.IsNullOrWhiteSpace(name) ? "Unknown Scrap" : name;
             this.value = Mathf.Max(0, value);
+        }
+    }
+
+    private void CacheItemSlots()
+    {
+        itemSlots.Clear();
+
+        if (inventorySlotsParent == null)
+        {
+            return;
+        }
+
+        ItemSlot[] slots = inventorySlotsParent.GetComponentsInChildren<ItemSlot>(true);
+        foreach (ItemSlot slot in slots)
+        {
+            if (slot == null || string.IsNullOrWhiteSpace(slot.itemId))
+            {
+                continue;
+            }
+
+            if (itemSlots.ContainsKey(slot.itemId))
+            {
+                continue;
+            }
+
+            itemSlots[slot.itemId] = slot;
+            slot.SetCount(0); // Initialize to x0
         }
     }
 
