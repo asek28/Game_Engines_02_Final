@@ -26,7 +26,7 @@ public class InventoryManager : MonoBehaviour
     [SerializeField] private RightMouseOrbit cameraOrbitOverride;
 
     [Header("Economy")]
-    public int money;
+    public int money = 0;
 
     private readonly List<ScrapData> collectedScraps = new List<ScrapData>();
     private readonly Dictionary<string, ItemSlot> itemSlots = new Dictionary<string, ItemSlot>();
@@ -61,6 +61,21 @@ public class InventoryManager : MonoBehaviour
         RefreshInventoryUI();
 
         SetInventoryVisibility(false, true);
+
+        // Gün döngüsü eventini dinle
+        DayNightCycle.OnDayComplete += OnDayComplete;
+    }
+
+    private void OnDestroy()
+    {
+        // Event dinleyicisini kaldır
+        DayNightCycle.OnDayComplete -= OnDayComplete;
+    }
+
+    private void OnDayComplete()
+    {
+        SellAllScraps();
+        ClearInventory();
     }
 
     public void AddScrap(Scrap scrap)
@@ -116,7 +131,7 @@ public class InventoryManager : MonoBehaviour
             return;
         }
 
-        moneyText.text = money.ToString();
+        moneyText.text = "$" + money.ToString();
     }
 
     public void SellScrap(int index)
@@ -131,6 +146,84 @@ public class InventoryManager : MonoBehaviour
         money += data.value;
         collectedScraps.RemoveAt(index);
         UpdateMoneyUI();
+        RefreshInventoryUI();
+    }
+
+    /// <summary>
+    /// Tüm scrapleri sat ve money'ye ekle
+    /// ItemId'ye göre sabit fiyatlar: scrap_value5 = 5$, scrap_value10 = 10$
+    /// </summary>
+    public void SellAllScraps()
+    {
+        int totalEarnings = 0;
+
+        // ItemSlot'lardan count'ları al ve itemId'ye göre fiyat hesapla
+        foreach (KeyValuePair<string, ItemSlot> kvp in itemSlots)
+        {
+            string itemId = kvp.Key;
+            ItemSlot slot = kvp.Value;
+
+            if (slot == null)
+            {
+                continue;
+            }
+
+            int count = slot.GetCount();
+            if (count <= 0)
+            {
+                continue;
+            }
+
+            // ItemId'ye göre fiyat belirle
+            int pricePerUnit = GetScrapPrice(itemId);
+            int earnings = count * pricePerUnit;
+            totalEarnings += earnings;
+        }
+
+        money += totalEarnings;
+        UpdateMoneyUI();
+    }
+
+    /// <summary>
+    /// ItemId'ye göre scrap fiyatını döndürür
+    /// </summary>
+    private int GetScrapPrice(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId))
+        {
+            return 0;
+        }
+
+        // ItemId'ye göre fiyat belirle
+        if (itemId.Contains("scrap_value5") || itemId == "scrap_value5")
+        {
+            return 5;
+        }
+        else if (itemId.Contains("scrap_value10") || itemId == "scrap_value10")
+        {
+            return 10;
+        }
+
+        // Varsayılan olarak 0 (bilinmeyen item)
+        return 0;
+    }
+
+    /// <summary>
+    /// Inventory'yi tamamen temizle (scrapleri ve ItemSlot count'larını sıfırla)
+    /// </summary>
+    public void ClearInventory()
+    {
+        collectedScraps.Clear();
+
+        // Tüm ItemSlot count'larını sıfırla
+        foreach (ItemSlot slot in itemSlots.Values)
+        {
+            if (slot != null)
+            {
+                slot.SetCount(0);
+            }
+        }
+
         RefreshInventoryUI();
     }
 

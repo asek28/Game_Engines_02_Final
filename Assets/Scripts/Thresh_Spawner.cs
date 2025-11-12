@@ -42,6 +42,21 @@ public class Thresh_Spawner : MonoBehaviour
     {
         HideSpawner();
         SpawnLoots();
+
+        // Gün döngüsü eventini dinle
+        DayNightCycle.OnDayComplete += OnDayComplete;
+    }
+
+    private void OnDestroy()
+    {
+        // Event dinleyicisini kaldır
+        DayNightCycle.OnDayComplete -= OnDayComplete;
+    }
+
+    private void OnDayComplete()
+    {
+        // Her gün döngüsünde scrapleri tekrar spawn et
+        SpawnLoots();
     }
 
     private void HideSpawner()

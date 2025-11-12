@@ -1,7 +1,9 @@
+using System;
 using UnityEngine;
 
 public class DayNightCycle : MonoBehaviour
 {
+    public static event Action OnDayComplete;
     [Header("Time Settings")]
     [Tooltip("Bir günün süresi (saniye cinsinden). Varsayılan: 120 saniye (2 dakika)")]
     [SerializeField, Min(1f)] private float dayDuration = 120f;
@@ -66,10 +68,18 @@ public class DayNightCycle : MonoBehaviour
         }
 
         // Zamanı güncelle
+        float previousTime = currentTime;
         currentTime += Time.deltaTime;
+        
         if (currentTime >= dayDuration)
         {
             currentTime = 0f; // Günü sıfırla
+            
+            // Gün tamamlandı eventini tetikle
+            if (OnDayComplete != null)
+            {
+                OnDayComplete.Invoke();
+            }
         }
 
         // Güneş rotasyonunu güncelle

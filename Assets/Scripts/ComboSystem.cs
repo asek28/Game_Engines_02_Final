@@ -1,8 +1,11 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class ComboSystem : MonoBehaviour
 {
+	public static event Action OnAttackPerformed;
+	
 	private Animator anim;
 	private AudioSource audioSource;
 
@@ -111,6 +114,12 @@ public class ComboSystem : MonoBehaviour
 				Debug.Log($"Setting ComboCount to {comboCount} in Animator");
 
 				PlayRandomHitSound();
+				
+				// Saldırı eventini tetikle
+				if (OnAttackPerformed != null)
+				{
+					OnAttackPerformed.Invoke();
+				}
 			}
 			
 			
@@ -139,7 +148,7 @@ public class ComboSystem : MonoBehaviour
 			return;
 		}
 
-		AudioClip clip = hitClips[Random.Range(0, hitClips.Length)];
+		AudioClip clip = hitClips[UnityEngine.Random.Range(0, hitClips.Length)];
 		if (clip != null)
 		{
 			audioSource.PlayOneShot(clip);
