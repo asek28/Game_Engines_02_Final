@@ -4,9 +4,21 @@ using UnityEngine;
 public class DayNightCycle : MonoBehaviour
 {
     public static event Action OnDayComplete;
+    public static event Action<int> OnDayChanged; // Gün değiştiğinde mevcut gün sayısını gönderir
+    
     [Header("Time Settings")]
     [Tooltip("Bir günün süresi (saniye cinsinden). Varsayılan: 120 saniye (2 dakika)")]
     [SerializeField, Min(1f)] private float dayDuration = 120f;
+    
+    [Header("Day Counter")]
+    [Tooltip("Mevcut gün sayısı")]
+    [SerializeField] private int currentDay = 1;
+    
+    [Header("Rain Effect Settings")]
+    [Tooltip("RainEffect GameObject (Player'ın child'ı). Eğer boşsa otomatik bulunur.")]
+    [SerializeField] private GameObject rainEffect;
+    [Tooltip("Kaç günde bir yağmur yağacak")]
+    [SerializeField, Min(1)] private int rainInterval = 4;
 
     [Header("Sun Rotation")]
     [Tooltip("Güneşin başlangıç açısı (X ekseni). 0 = ufukta, 90 = tepede")]
@@ -49,6 +61,44 @@ public class DayNightCycle : MonoBehaviour
             return;
         }
 
+        // RainEffect'i bul (Player'ın child'ı olarak)
+        if (rainEffect == null)
+        {
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if (player == null)
+            {
+                // Tag yoksa isimle bul
+                player = GameObject.Find("Player");
+            }
+            
+            if (player != null)
+            {
+                // Player'ın child'ları arasında RainEffect'i ara
+                Transform rainTransform = player.transform.Find("RainEffect");
+                if (rainTransform != null)
+                {
+                    rainEffect = rainTransform.gameObject;
+                }
+                else
+                {
+                    // İsim farklı olabilir, tüm child'ları kontrol et
+                    foreach (Transform child in player.transform)
+                    {
+                        if (child.name.ToLower().Contains("rain"))
+                        {
+                            rainEffect = child.gameObject;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (rainEffect == null)
+            {
+                Debug.LogWarning("DayNightCycle: RainEffect GameObject not found. Please assign it manually in the Inspector.");
+            }
+        }
+
         isInitialized = true;
     }
 
@@ -57,6 +107,7 @@ public class DayNightCycle : MonoBehaviour
         if (isInitialized)
         {
             UpdateSunRotation(0f);
+            UpdateRainEffect();
         }
     }
 
@@ -75,11 +126,23 @@ public class DayNightCycle : MonoBehaviour
         {
             currentTime = 0f; // Günü sıfırla
             
+            // Gün sayısını artır
+            currentDay++;
+            
+            // Gün değişti eventini tetikle
+            if (OnDayChanged != null)
+            {
+                OnDayChanged.Invoke(currentDay);
+            }
+            
             // Gün tamamlandı eventini tetikle
             if (OnDayComplete != null)
             {
                 OnDayComplete.Invoke();
             }
+            
+            // Yağmur efektini güncelle
+            UpdateRainEffect();
         }
 
         // Güneş rotasyonunu güncelle
@@ -157,6 +220,48 @@ public class DayNightCycle : MonoBehaviour
     public void SetTime(float normalizedTime)
     {
         currentTime = Mathf.Clamp01(normalizedTime) * dayDuration;
+    }
+
+    /// <summary>
+    /// Yağmur efektini gün sayısına göre açıp kapatır
+    /// </summary>
+    private void UpdateRainEffect()
+    {
+        if (rainEffect == null)
+        {
+            return;
+        }
+
+        // 4 günde bir yağmur yağacak (gün 4, 8, 12, 16, ...)
+        bool shouldRain = (currentDay % rainInterval == 0);
+        
+        rainEffect.SetActive(shouldRain);
+        
+        if (shouldRain)
+        {
+            Debug.Log($"[DayNightCycle] Day {currentDay}: Rain effect activated!");
+        }
+        else
+        {
+            Debug.Log($"[DayNightCycle] Day {currentDay}: Rain effect deactivated.");
+        }
+    }
+
+    /// <summary>
+    /// Mevcut gün sayısını döndürür
+    /// </summary>
+    public int GetCurrentDay()
+    {
+        return currentDay;
+    }
+
+    /// <summary>
+    /// Gün sayısını manuel olarak ayarlar
+    /// </summary>
+    public void SetDay(int day)
+    {
+        currentDay = Mathf.Max(1, day);
+        UpdateRainEffect();
     }
 }
 

@@ -123,6 +123,26 @@ public class Loot : MonoBehaviour
         // Nesneyi tamamen yok et
         Destroy(gameObject);
     }
+    
+    // Enemy'lerin loot bilgilerine erişmesi için public metodlar
+    public string GetItemId()
+    {
+        return itemId;
+    }
+    
+    public string GetItemDisplayName()
+    {
+        if (string.IsNullOrWhiteSpace(itemDisplayName))
+        {
+            ValidateNaming();
+        }
+        return itemDisplayName;
+    }
+    
+    public int GetScrapValue()
+    {
+        return scrapValue;
+    }
     private void ValidateNaming()
     {
         if (string.IsNullOrWhiteSpace(itemId) && string.IsNullOrWhiteSpace(itemDisplayName))
