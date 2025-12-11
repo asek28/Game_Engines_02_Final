@@ -85,8 +85,29 @@ public class Enemy : MonoBehaviour
     [Header("References")]
     [Tooltip("Animator component. Eğer boşsa otomatik bulunur.")]
     [SerializeField] private Animator animator;
+    
+    [Header("Juice Settings - Visual & Audio Feedback")]
+    [Tooltip("Hit sound effect")]
+    [SerializeField] private AudioClip hitSound;
+    [Tooltip("Hit VFX particle system (hit point'te spawn olacak)")]
+    [SerializeField] private GameObject hitVFXPrefab;
+    [Tooltip("Floating damage text prefab (optional)")]
+    [SerializeField] private GameObject damageTextPrefab;
+    [Tooltip("Material flash süresi (saniye)")]
+    [SerializeField, Min(0.01f)] private float flashDuration = 0.1f;
+    [Tooltip("Flash rengi (beyaz flash için)")]
+    [SerializeField] private Color flashColor = Color.white;
+    [Tooltip("Knockback gücü")]
+    [SerializeField, Min(0f)] private float knockbackForce = 5f;
+    [Tooltip("Knockback yukarı kuvveti")]
+    [SerializeField, Min(0f)] private float knockbackUpwardForce = 2f;
 
     private CharacterController controller;
+    private Rigidbody enemyRigidbody;
+    private Renderer[] enemyRenderers;
+    private Material[] originalMaterials;
+    private Material[] flashMaterials;
+    private AudioSource audioSource;
     private Collider enemyCollider;
     private Vector3 startPosition;
     private Vector3 currentDestination;
@@ -155,6 +176,44 @@ public class Enemy : MonoBehaviour
             {
                 Debug.LogWarning($"Enemy on {name}: Animator component not found. Animation control will not work.");
             }
+        }
+        
+        // Rigidbody'yi bul veya ekle (knockback için)
+        enemyRigidbody = GetComponent<Rigidbody>();
+        if (enemyRigidbody == null)
+        {
+            enemyRigidbody = gameObject.AddComponent<Rigidbody>();
+            enemyRigidbody.isKinematic = true; // CharacterController ile çalışması için
+            enemyRigidbody.useGravity = false;
+        }
+
+        // Renderer'ları bul (material flash için)
+        enemyRenderers = GetComponentsInChildren<Renderer>();
+        if (enemyRenderers != null && enemyRenderers.Length > 0)
+        {
+            originalMaterials = new Material[enemyRenderers.Length];
+            flashMaterials = new Material[enemyRenderers.Length];
+            
+            for (int i = 0; i < enemyRenderers.Length; i++)
+            {
+                if (enemyRenderers[i] != null)
+                {
+                    originalMaterials[i] = enemyRenderers[i].material;
+                    // Flash material oluştur (beyaz emission)
+                    flashMaterials[i] = new Material(originalMaterials[i]);
+                    flashMaterials[i].EnableKeyword("_EMISSION");
+                    flashMaterials[i].SetColor("_EmissionColor", flashColor);
+                }
+            }
+        }
+        
+        // AudioSource'u bul veya ekle
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 1f; // 3D sound
         }
 
         startPosition = transform.position;
@@ -697,7 +756,13 @@ public class Enemy : MonoBehaviour
     }
 
 
-    public void TakeDamage(int damage)
+    /// <summary>
+    /// Enemy'ye hasar verir (juice efektleri ile)
+    /// </summary>
+    /// <param name="damage">Hasar miktarı</param>
+    /// <param name="hitPoint">Vuruş noktası (VFX için)</param>
+    /// <param name="knockbackDirection">Knockback yönü</param>
+    public void TakeDamage(int damage, Vector3 hitPoint, Vector3 knockbackDirection)
     {
         if (isDead)
         {
@@ -717,6 +782,9 @@ public class Enemy : MonoBehaviour
         }
 
         Debug.Log($"[Enemy] {name}: Took {damage} damage! Current health: {currentHealth}/{maxHealth}");
+
+        // Visual & Audio Feedback
+        ApplyHitFeedback(hitPoint, knockbackDirection, damage);
 
         // Hit animasyonu trigger'la
         if (animator != null)
@@ -740,6 +808,126 @@ public class Enemy : MonoBehaviour
         if (currentHealth <= 0)
         {
             Die();
+        }
+    }
+    
+    /// <summary>
+    /// Eski TakeDamage fonksiyonu (geriye dönük uyumluluk için)
+    /// </summary>
+    public void TakeDamage(int damage)
+    {
+        Vector3 hitPoint = transform.position;
+        Vector3 knockbackDirection = playerTransform != null 
+            ? (transform.position - playerTransform.position).normalized 
+            : -transform.forward;
+        
+        TakeDamage(damage, hitPoint, knockbackDirection);
+    }
+    
+    /// <summary>
+    /// Hit feedback efektlerini uygular (material flash, knockback, audio, VFX, floating text)
+    /// </summary>
+    private void ApplyHitFeedback(Vector3 hitPoint, Vector3 knockbackDirection, int damage)
+    {
+        // Material Flash: Enemy'nin material'ını beyaz yap (split second)
+        StartCoroutine(MaterialFlashCoroutine());
+        
+        // Knockback: Enemy'yi geriye it
+        ApplyKnockback(knockbackDirection);
+        
+        // Audio: Hit sound çal
+        if (hitSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(hitSound);
+        }
+        
+        // VFX: Hit particle effect spawn et
+        if (hitVFXPrefab != null)
+        {
+            GameObject vfx = Instantiate(hitVFXPrefab, hitPoint, Quaternion.identity);
+            Destroy(vfx, 5f); // 5 saniye sonra temizle
+        }
+        
+        // Floating Text: Damage number göster (optional)
+        if (damageTextPrefab != null)
+        {
+            GameObject damageText = Instantiate(damageTextPrefab, hitPoint + Vector3.up * 2f, Quaternion.identity);
+            // Floating text script'i varsa damage'i set et
+            DamageText dt = damageText.GetComponent<DamageText>();
+            if (dt != null)
+            {
+                dt.SetDamage(damage);
+            }
+            else
+            {
+                // Basit text mesh varsa
+                TMPro.TextMeshPro tmp = damageText.GetComponent<TMPro.TextMeshPro>();
+                if (tmp != null)
+                {
+                    tmp.text = damage.ToString();
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Material Flash Coroutine - Enemy'nin material'ını beyaz yapar ve geri döndürür
+    /// </summary>
+    private System.Collections.IEnumerator MaterialFlashCoroutine()
+    {
+        if (enemyRenderers == null || flashMaterials == null)
+        {
+            yield break;
+        }
+        
+        // Material'ları flash material'a değiştir
+        for (int i = 0; i < enemyRenderers.Length; i++)
+        {
+            if (enemyRenderers[i] != null && flashMaterials[i] != null)
+            {
+                enemyRenderers[i].material = flashMaterials[i];
+            }
+        }
+        
+        // Flash süresini bekle
+        yield return new WaitForSeconds(flashDuration);
+        
+        // Material'ları orijinal haline döndür
+        for (int i = 0; i < enemyRenderers.Length; i++)
+        {
+            if (enemyRenderers[i] != null && originalMaterials[i] != null)
+            {
+                enemyRenderers[i].material = originalMaterials[i];
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Knockback uygular - Enemy'yi geriye iter
+    /// </summary>
+    private void ApplyKnockback(Vector3 direction)
+    {
+        if (knockbackForce <= 0f)
+        {
+            return;
+        }
+        
+        // Knockback direction'ı normalize et
+        direction.y = 0f; // Y eksenini sıfırla (sadece yatay)
+        direction.Normalize();
+        
+        // Yukarı kuvvet ekle
+        Vector3 knockbackVector = direction * knockbackForce + Vector3.up * knockbackUpwardForce;
+        
+        // CharacterController kullanıyorsak velocity ile knockback uygula
+        if (controller != null)
+        {
+            velocity += knockbackVector;
+        }
+        // Rigidbody varsa force ile uygula
+        else if (enemyRigidbody != null && !enemyRigidbody.isKinematic)
+        {
+            enemyRigidbody.AddForce(knockbackVector, ForceMode.Impulse);
         }
     }
 
