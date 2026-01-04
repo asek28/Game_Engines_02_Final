@@ -89,22 +89,26 @@ public class Loot : MonoBehaviour
             UpdateHighlight(false);
         }
     }
-
-    private void Update()
+    
+    /// <summary>
+    /// PlayerLootCollector tarafından çağrılır - highlight'ı günceller
+    /// </summary>
+    public void SetPlayerInRange(bool inRange)
     {
-        if (!playerInRange)
+        if (playerInRange != inRange)
         {
-            return;
-        }
-
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
-        {
-            TryCollect();
+            playerInRange = inRange;
+            UpdateHighlight(inRange);
         }
     }
 
-    private void TryCollect()
+    // Update metodu kaldırıldı - Artık PlayerLootCollector E tuşu ile topluyor
+    // Bu sayede daha uzaktan loot toplanabilir
+    
+    /// <summary>
+    /// Loot'u toplar (PlayerLootCollector tarafından çağrılır)
+    /// </summary>
+    public void TryCollect()
     {
         if (string.IsNullOrWhiteSpace(itemDisplayName))
         {
