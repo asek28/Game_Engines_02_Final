@@ -309,15 +309,15 @@ public class Enemy : MonoBehaviour
         // Loot arama
         if (shouldSearchLoot)
         {
-            lootSearchTimer += Time.deltaTime;
-            if (lootSearchTimer >= lootSearchInterval)
-            {
-                lootSearchTimer = 0f;
+        lootSearchTimer += Time.deltaTime;
+        if (lootSearchTimer >= lootSearchInterval)
+        {
+            lootSearchTimer = 0f;
                 // Sadece şu anda loot hedefi yoksa ara (sürekli aramayı önlemek için)
                 if (currentTargetLoot == null)
                 {
-                    SearchForLoot();
-                }
+            SearchForLoot();
+        }
             }
         }
         
@@ -427,7 +427,7 @@ public class Enemy : MonoBehaviour
             float distanceToDestination = Vector3.Distance(transform.position, currentDestination);
             if (distanceToDestination < arrivalDistance || distanceToDestination > wanderRadius * 1.5f)
             {
-                SetForwardDestination();
+            SetForwardDestination();
             }
         }
 
@@ -589,7 +589,7 @@ public class Enemy : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(currentForwardDirection);
         
         // Yeni hedef belirle
-        SetForwardDestination();
+            SetForwardDestination();
     }
 
     private void ApplyGravity()

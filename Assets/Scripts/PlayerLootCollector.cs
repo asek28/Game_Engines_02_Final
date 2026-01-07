@@ -28,16 +28,79 @@ public class PlayerLootCollector : MonoBehaviour
     [Tooltip("UI'ın ekrandaki pozisyonu (0-1 arası, 0.5 = ortada)")]
     [SerializeField] private Vector2 uiPosition = new Vector2(0.5f, 0.2f);
     
+    [Header("Audio Settings")]
+    [Tooltip("Loot toplama ses efektleri (rastgele seçilir). Boşsa Resources klasöründen yüklenir.")]
+    [SerializeField] private AudioClip[] lootCollectSounds;
+    [Tooltip("Resources klasöründen otomatik yükle (Resources/SFX/ klasöründen)")]
+    [SerializeField] private bool autoLoadFromResources = true;
+    [Tooltip("Resources klasöründeki alt klasör yolu (örnek: 'SFX' veya 'SFX/Loot')")]
+    [SerializeField] private string resourcesPath = "SFX";
+    [Tooltip("Ses çalma hacmi (0-1 arası)")]
+    [SerializeField, Range(0f, 1f)] private float volume = 1f;
+    
     private List<Loot> nearbyLoots = new List<Loot>();
     private float searchTimer = 0f;
     private Transform playerTransform;
     private Canvas uiCanvas;
     private GameObject interactPromptObject;
+    private AudioSource audioSource;
     
     private void Awake()
     {
         playerTransform = transform;
         SetupUI();
+        SetupAudio();
+    }
+    
+    /// <summary>
+    /// Audio sistemini ayarlar
+    /// </summary>
+    private void SetupAudio()
+    {
+        // AudioSource'u bul veya oluştur
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 0f; // 2D ses
+        }
+        
+        // Eğer sesler atanmamışsa ve otomatik yükleme aktifse, Resources'tan yükle
+        if ((lootCollectSounds == null || lootCollectSounds.Length == 0) && autoLoadFromResources)
+        {
+            LoadSoundsFromResources();
+        }
+        
+        // Eğer hala ses yoksa uyarı ver
+        if (lootCollectSounds == null || lootCollectSounds.Length == 0)
+        {
+            Debug.LogWarning("[PlayerLootCollector] No loot collect sounds assigned! Please assign AudioClips in the Inspector or place them in Resources/SFX/ folder.");
+        }
+    }
+    
+    /// <summary>
+    /// Resources klasöründen ses efektlerini yükler
+    /// </summary>
+    private void LoadSoundsFromResources()
+    {
+        if (string.IsNullOrEmpty(resourcesPath))
+        {
+            resourcesPath = "SFX";
+        }
+        
+        // Resources klasöründen tüm AudioClip'leri yükle
+        AudioClip[] loadedClips = Resources.LoadAll<AudioClip>(resourcesPath);
+        
+        if (loadedClips != null && loadedClips.Length > 0)
+        {
+            lootCollectSounds = loadedClips;
+            Debug.Log($"[PlayerLootCollector] Loaded {loadedClips.Length} audio clips from Resources/{resourcesPath}/");
+        }
+        else
+        {
+            Debug.LogWarning($"[PlayerLootCollector] No audio clips found in Resources/{resourcesPath}/. Make sure your SFX files are in Resources/SFX/ folder.");
+        }
     }
     
     private void OnDestroy()
@@ -254,8 +317,31 @@ public class PlayerLootCollector : MonoBehaviour
         float distance = Vector3.Distance(playerTransform.position, loot.transform.position);
         Debug.Log($"[PlayerLootCollector] Collecting loot from distance: {distance:F2}");
         
+        // Rastgele ses efekti çal
+        PlayRandomCollectSound();
+        
         // Loot'un kendi TryCollect metodunu çağır
         loot.TryCollect();
+    }
+    
+    /// <summary>
+    /// Rastgele bir loot toplama sesi çalar
+    /// </summary>
+    private void PlayRandomCollectSound()
+    {
+        if (audioSource == null || lootCollectSounds == null || lootCollectSounds.Length == 0)
+        {
+            return;
+        }
+        
+        // Rastgele bir ses seç
+        AudioClip randomClip = lootCollectSounds[UnityEngine.Random.Range(0, lootCollectSounds.Length)];
+        
+        if (randomClip != null)
+        {
+            audioSource.PlayOneShot(randomClip, volume);
+            Debug.Log($"[PlayerLootCollector] Playing collect sound: {randomClip.name}");
+        }
     }
     
     private void OnDrawGizmosSelected()
