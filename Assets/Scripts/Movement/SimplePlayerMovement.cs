@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+[DefaultExecutionOrder(100)]
 public class SimplePlayerMovement : MonoBehaviour
 {
     [Header("Movement Settings")]
@@ -17,20 +18,54 @@ public class SimplePlayerMovement : MonoBehaviour
     private Vector3 velocity;
     private bool isRunning;
     private Vector2 currentMoveInput;
+    private PlayerHealth playerHealth;
     
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        playerHealth = GetComponent<PlayerHealth>();
         
         if (controller == null)
         {
-            Debug.LogError("CharacterController component not found! Please add CharacterController component to this GameObject.");
+            Debug.LogError("[SimplePlayerMovement] CharacterController NULL!");
+            enabled = false;
+            return;
         }
+        
+        if (!controller.enabled)
+        {
+            Debug.LogWarning("[SimplePlayerMovement] CharacterController DISABLED!");
+            enabled = false;
+            return;
+        }
+        
+        Debug.Log("[SimplePlayerMovement] Started successfully!");
     }
     
     void Update()
     {
-        if (controller == null) return;
+        // Time.timeScale = 0 ise hareket etme (oyun duraklatılmış)
+        if (Time.timeScale <= 0f)
+        {
+            return;
+        }
+        
+        // Controller'ı YENİDEN al (her frame)
+        controller = GetComponent<CharacterController>();
+        
+        // Controller kontrolü
+        if (controller == null || !controller.enabled)
+        {
+            enabled = false;
+            return;
+        }
+        
+        // Player ölü mü?
+        if (playerHealth != null && playerHealth.IsDead) 
+        {
+            enabled = false;
+            return;
+        }
         
         // Settings paneli açıksa hareket etme
         SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
@@ -45,7 +80,7 @@ public class SimplePlayerMovement : MonoBehaviour
             return;
         }
         
-        // Get input using Input System
+        // Input
         float rotationInput = 0f;
         float forwardInput = 0f;
         float horizontalInput = 0f;
@@ -58,27 +93,19 @@ public class SimplePlayerMovement : MonoBehaviour
             forwardInput  = (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0);
             horizontalInput = (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0);
             sprintPressed = keyboard.leftShiftKey.isPressed;
-            
-            // Debug: Shift tuşu kontrolü
-            if (sprintPressed && forwardInput > 0)
-            {
-                Debug.Log($"<color=cyan>[SimplePlayerMovement] Shift pressed! forwardInput: {forwardInput}</color>");
-            }
-        }
-        else
-        {
-            Debug.LogWarning("No keyboard found!");
         }
         
-        // Camera-relative basis
+        // Camera direction
         Vector3 moveDirection = transform.forward;
         Vector3 strafeDirection = transform.right;
         bool hasCameraDirection = false;
+        
         if (useCameraDirection && Camera.main != null && Mathf.Abs(rotationInput) <= 0.01f)
         {
             Transform cam = Camera.main.transform;
             Vector3 camForward = Vector3.ProjectOnPlane(cam.forward, Vector3.up).normalized;
             Vector3 camRight = Vector3.ProjectOnPlane(cam.right, Vector3.up).normalized;
+            
             if (camForward.sqrMagnitude > 0.001f)
             {
                 moveDirection = camForward;
@@ -90,7 +117,7 @@ public class SimplePlayerMovement : MonoBehaviour
             }
         }
 
-        // Rotate player
+        // Rotate
         if (Mathf.Abs(rotationInput) > 0.01f)
         {
             transform.Rotate(Vector3.up, rotationInput * rotationSpeed * Time.deltaTime);
@@ -101,43 +128,50 @@ public class SimplePlayerMovement : MonoBehaviour
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
         
-        // Create movement vector (strafe + forward)
+        // Movement
         Vector3 move = (moveDirection * forwardInput) + (strafeDirection * horizontalInput);
         if (move.sqrMagnitude > 1f) move.Normalize();
         
         currentMoveInput = new Vector2(horizontalInput, forwardInput);
-
-        // Determine speed
         float currentSpeed = sprintPressed ? runSpeed : walkSpeed;
         
-        // Apply movement
-        controller.Move(move * currentSpeed * Time.deltaTime);
+        // Apply movement - YENİDEN AL VE KONTROL ET
+        CharacterController cc = GetComponent<CharacterController>();
+        if (cc != null && cc.enabled && cc.gameObject.activeInHierarchy)
+        {
+            cc.Move(move * currentSpeed * Time.deltaTime);
+        }
+        else
+        {
+            enabled = false;
+            return;
+        }
         
-        
+        // Gravity
         velocity.y += Physics.gravity.y * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
         
+        // Apply gravity - YENİDEN AL VE KONTROL ET
+        cc = GetComponent<CharacterController>();
+        if (cc != null && cc.enabled && cc.gameObject.activeInHierarchy)
+        {
+            cc.Move(velocity * Time.deltaTime);
+        }
+        else
+        {
+            enabled = false;
+            return;
+        }
         
-        if (controller.isGrounded && velocity.y < 0)
+        // Ground check
+        if (controller != null && controller.enabled && controller.isGrounded && velocity.y < 0)
         {
             velocity.y = -2f;
         }
         
-        
-        bool previousRunning = isRunning;
+        // Running state
         isRunning = sprintPressed && move.sqrMagnitude > 0.1f;
-        
-        // Debug: isRunning değişimi (daha detaylı)
-        if (previousRunning != isRunning)
-        {
-            Debug.Log($"<color=yellow>[SimplePlayerMovement] isRunning = {isRunning}</color>");
-            Debug.Log($"   - sprintPressed: {sprintPressed}");
-            Debug.Log($"   - move.sqrMagnitude: {move.sqrMagnitude:F2}");
-            Debug.Log($"   - forwardInput: {forwardInput}, horizontalInput: {horizontalInput}");
-        }
     }
     
-    // AnimationController
     public bool IsMoving()
     {
         return currentMoveInput.sqrMagnitude > 0.1f;

@@ -170,11 +170,18 @@ public class PlayerHealth : MonoBehaviour
     /// </summary>
     private void Die()
     {
-        if (isDead) return;
+        if (isDead)
+        {
+            Debug.LogWarning("[PlayerHealth] Already dead! Ignoring Die() call.");
+            return;
+        }
         
         isDead = true;
         
-        Debug.Log("<color=red>[PlayerHealth] Player DIED!</color>");
+        Debug.Log("<color=red>[PlayerHealth] ☠️ Player DIED! Health: " + currentHealth + "</color>");
+        
+        // Hareketi durdur
+        DisableMovement();
         
         // Ölüm sesi
         if (audioSource != null && deathSound != null)
@@ -183,10 +190,54 @@ public class PlayerHealth : MonoBehaviour
         }
         
         // Event tetikle
+        Debug.Log("[PlayerHealth] Invoking OnDeath event...");
         OnDeath?.Invoke();
+        
+        Debug.Log($"[PlayerHealth] Invoking OnPlayerDied static event... (Subscribers: {(OnPlayerDied != null ? OnPlayerDied.GetInvocationList().Length : 0)})");
         OnPlayerDied?.Invoke(); // Static event (DeathScreenUI için)
         
-        // Burada ölüm animasyonu, game over ekranı, vb. eklenebilir
+        Debug.Log("[PlayerHealth] Die() completed!");
+    }
+    
+    /// <summary>
+    /// Player'ın hareket sistemini devre dışı bırak
+    /// </summary>
+    private void DisableMovement()
+    {
+        Debug.Log("<color=orange>[PlayerHealth] ⏸️ Disabling movement systems...</color>");
+        
+        // Movement scriptlerini ÖNCE devre dışı bırak (Update çalışmasın)
+        SimplePlayerMovement simpleMovement = GetComponent<SimplePlayerMovement>();
+        if (simpleMovement != null)
+        {
+            simpleMovement.enabled = false;
+            Debug.Log($"[PlayerHealth] SimplePlayerMovement disabled. Was enabled: {simpleMovement.enabled}");
+        }
+        
+        ShopPlayerMovement shopMovement = GetComponent<ShopPlayerMovement>();
+        if (shopMovement != null)
+        {
+            shopMovement.enabled = false;
+            Debug.Log($"[PlayerHealth] ShopPlayerMovement disabled. Was enabled: {shopMovement.enabled}");
+        }
+        
+        // NavMeshAgent'ı devre dışı bırak (eğer varsa)
+        UnityEngine.AI.NavMeshAgent navAgent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+        if (navAgent != null)
+        {
+            navAgent.enabled = false;
+            Debug.Log("[PlayerHealth] NavMeshAgent disabled.");
+        }
+        
+        // CharacterController'ı SONRA devre dışı bırak
+        CharacterController controller = GetComponent<CharacterController>();
+        if (controller != null)
+        {
+            controller.enabled = false;
+            Debug.Log($"[PlayerHealth] CharacterController disabled. IsEnabled: {controller.enabled}");
+        }
+        
+        Debug.Log("<color=orange>[PlayerHealth] ✓ All movement systems disabled!</color>");
     }
     
     /// <summary>

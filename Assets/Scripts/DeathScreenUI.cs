@@ -92,12 +92,24 @@ public class DeathScreenUI : MonoBehaviour
     /// </summary>
     private void ShowDeathScreen()
     {
-        if (isDeathScreenActive || deathScreenPanel == null)
+        Debug.Log($"[DeathScreenUI] ShowDeathScreen() called! isDeathScreenActive: {isDeathScreenActive}, deathScreenPanel: {(deathScreenPanel != null ? deathScreenPanel.name : "NULL")}");
+        
+        if (isDeathScreenActive)
         {
+            Debug.LogWarning("[DeathScreenUI] Death screen already active!");
+            return;
+        }
+        
+        if (deathScreenPanel == null)
+        {
+            Debug.LogError("[DeathScreenUI] ❌ deathScreenPanel is NULL! Assign it in Inspector!");
             return;
         }
 
-        Debug.Log("[DeathScreenUI] Player died! Showing death screen...");
+        Debug.Log("[DeathScreenUI] ✅ Player died! Showing death screen...");
+
+        // Player movement'ı devre dışı bırak (Time.timeScale = 0 yeterli olmayabilir)
+        DisablePlayerMovement();
 
         // Panel'i aktif et
         deathScreenPanel.SetActive(true);
@@ -107,6 +119,7 @@ public class DeathScreenUI : MonoBehaviour
         if (pauseGameOnDeath)
         {
             Time.timeScale = 0f;
+            Debug.Log("[DeathScreenUI] ⏸️ Time.timeScale set to 0f - Game paused!");
         }
 
         // Cursor'u göster
@@ -114,10 +127,69 @@ public class DeathScreenUI : MonoBehaviour
         {
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
+            Debug.Log("[DeathScreenUI] 🖱️ Cursor unlocked and visible.");
         }
 
         // İstatistikleri göster
         UpdateDeathStats();
+    }
+    
+    /// <summary>
+    /// Player movement sistemlerini devre dışı bırak
+    /// </summary>
+    private void DisablePlayerMovement()
+    {
+        // Player GameObject'ini bul
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null)
+        {
+            Debug.LogWarning("[DeathScreenUI] Player GameObject not found by tag! Trying alternative methods...");
+            // Alternatif: PlayerHealth'den al
+            if (playerHealth != null)
+            {
+                player = playerHealth.gameObject;
+            }
+        }
+        
+        if (player == null)
+        {
+            Debug.LogError("[DeathScreenUI] ❌ Cannot find Player GameObject! Movement may not be disabled.");
+            return;
+        }
+        
+        Debug.Log($"[DeathScreenUI] 🛑 Disabling movement on player: {player.name}");
+        
+        // SimplePlayerMovement'ı devre dışı bırak
+        SimplePlayerMovement simpleMovement = player.GetComponent<SimplePlayerMovement>();
+        if (simpleMovement != null)
+        {
+            simpleMovement.enabled = false;
+            Debug.Log("[DeathScreenUI] ✓ SimplePlayerMovement disabled.");
+        }
+        
+        // ShopPlayerMovement'ı devre dışı bırak
+        ShopPlayerMovement shopMovement = player.GetComponent<ShopPlayerMovement>();
+        if (shopMovement != null)
+        {
+            shopMovement.enabled = false;
+            Debug.Log("[DeathScreenUI] ✓ ShopPlayerMovement disabled.");
+        }
+        
+        // CharacterController'ı devre dışı bırak (hareketi tamamen engelle)
+        CharacterController controller = player.GetComponent<CharacterController>();
+        if (controller != null)
+        {
+            controller.enabled = false;
+            Debug.Log("[DeathScreenUI] ✓ CharacterController disabled.");
+        }
+        
+        // NavMeshAgent'ı devre dışı bırak (eğer varsa)
+        UnityEngine.AI.NavMeshAgent navAgent = player.GetComponent<UnityEngine.AI.NavMeshAgent>();
+        if (navAgent != null)
+        {
+            navAgent.enabled = false;
+            Debug.Log("[DeathScreenUI] ✓ NavMeshAgent disabled.");
+        }
     }
 
     /// <summary>
@@ -143,19 +215,19 @@ public class DeathScreenUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Toplam parayı al (InventoryManager'dan veya PlayerPrefs)
+    /// Toplam kazanılan parayı al (oyun başından beri kazanılan)
     /// </summary>
     private int GetTotalMoney()
     {
-        // InventoryManager varsa ondan al
+        // InventoryManager varsa ondan al (toplam kazanılan para)
         InventoryManager inventoryManager = FindFirstObjectByType<InventoryManager>();
         if (inventoryManager != null)
         {
-            return inventoryManager.GetCurrentMoney();
+            return inventoryManager.GetTotalEarnedMoney();
         }
 
         // PlayerPrefs'den al (varsa)
-        return PlayerPrefs.GetInt("TotalMoney", 0);
+        return PlayerPrefs.GetInt("TotalEarnedMoney", 0);
     }
 
     /// <summary>

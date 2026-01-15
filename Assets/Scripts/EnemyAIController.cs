@@ -103,8 +103,11 @@ public class EnemyAIController : MonoBehaviour
     [SerializeField] private EnemyAnimationController animationController;
     
     [Header("Juice Settings - Visual & Audio Feedback")]
-    [Tooltip("Hit sound effect")]
+    [Tooltip("Hasar alma sesi (enemy vurulduğunda çalar)")]
     [SerializeField] private AudioClip hitSound;
+    
+    [Tooltip("Ölüm sesi (enemy öldüğünde çalar)")]
+    [SerializeField] private AudioClip deathSound;
     
     [Tooltip("Hit VFX particle system (hit point'te spawn olacak)")]
     [SerializeField] private GameObject hitVFXPrefab;
@@ -1061,10 +1064,19 @@ public class EnemyAIController : MonoBehaviour
         // Knockback: Enemy'yi geriye it
         ApplyKnockback(knockbackDirection);
         
-        // Audio: Hit sound çal
+        // Audio: Hasar alma sesi çal
         if (hitSound != null && audioSource != null)
         {
             audioSource.PlayOneShot(hitSound);
+            DebugLog($"[EnemyAIController] {name}: Hit sound played!");
+        }
+        else if (hitSound == null)
+        {
+            DebugLogWarning($"[EnemyAIController] {name}: Hit sound not assigned! Enemy won't make sound when taking damage.");
+        }
+        else if (audioSource == null)
+        {
+            DebugLogWarning($"[EnemyAIController] {name}: AudioSource is null! Cannot play hit sound.");
         }
         
         // VFX: Hit particle effect spawn et
@@ -1160,6 +1172,17 @@ public class EnemyAIController : MonoBehaviour
         }
 
         isDead = true;
+        
+        // Death sound çal
+        if (deathSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(deathSound);
+            DebugLog($"[EnemyAIController] {name}: Death sound played!");
+        }
+        else if (deathSound == null)
+        {
+            DebugLogWarning($"[EnemyAIController] {name}: Death sound not assigned!");
+        }
         
         // Death animasyonu EnemyAnimationController üzerinden zaten ayarlandı (TakeDamage'da Death = 1 yapıldı)
         // Animasyonun bitmesini bekle

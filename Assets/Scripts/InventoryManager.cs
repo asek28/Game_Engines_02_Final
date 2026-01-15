@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -7,6 +8,9 @@ using UnityEngine.InputSystem;
 public class InventoryManager : MonoBehaviour
 {
     public static InventoryManager instance { get; private set; }
+    
+    // Para değiştiğinde tetiklenen event (tüm UI'ları güncellemek için)
+    public static event Action<int> OnMoneyChanged;
 
     [Header("UI References")]
     public Transform itemListParent;
@@ -27,6 +31,13 @@ public class InventoryManager : MonoBehaviour
 
     [Header("Economy")]
     public int money = 0;
+    
+    [Header("PlayerPrefs Keys")]
+    [Tooltip("PlayerPrefs key for current money")]
+    [SerializeField] private string moneyKey = "CurrentMoney";
+    
+    [Tooltip("PlayerPrefs key for total earned money (lifetime)")]
+    [SerializeField] private string totalEarnedKey = "TotalEarnedMoney";
 
     private readonly List<ScrapData> collectedScraps = new List<ScrapData>();
     private readonly Dictionary<string, ItemSlot> itemSlots = new Dictionary<string, ItemSlot>();
@@ -57,13 +68,32 @@ public class InventoryManager : MonoBehaviour
         CacheCameraOrbit();
         CacheItemSlots();
 
-        UpdateMoneyUI();
+        // PlayerPrefs'ten para'yı yükle
+        LoadMoneyFromPlayerPrefs();
+
+        // Para UI'larını güncelle (tüm UI'ları bildir)
+        NotifyMoneyChanged();
         RefreshInventoryUI();
 
         SetInventoryVisibility(false, true);
 
         // Gün döngüsü eventini dinle
         DayNightCycle.OnDayComplete += OnDayComplete;
+    }
+    
+    private void OnApplicationQuit()
+    {
+        // Oyun kapanırken para'yı kaydet
+        SaveMoneyToPlayerPrefs();
+    }
+    
+    private void OnApplicationPause(bool pauseStatus)
+    {
+        if (pauseStatus)
+        {
+            // Oyun duraklatıldığında para'yı kaydet
+            SaveMoneyToPlayerPrefs();
+        }
     }
 
     private void OnDestroy()
@@ -197,18 +227,128 @@ public class InventoryManager : MonoBehaviour
         public List<int> indices;
     }
 
+    /// <summary>
+    /// Para miktarını ayarla (tüm UI'ları otomatik günceller)
+    /// </summary>
+    public void SetMoney(int newMoney)
+    {
+        money = newMoney;
+        NotifyMoneyChanged();
+        SaveMoneyToPlayerPrefs(); // Anında kaydet
+    }
+    
+    /// <summary>
+    /// Para ekle (tüm UI'ları otomatik günceller)
+    /// </summary>
+    public void AddMoney(int amount)
+    {
+        money += amount;
+        
+        // Toplam kazanılan parayı da güncelle
+        int totalEarned = PlayerPrefs.GetInt(totalEarnedKey, 0);
+        totalEarned += amount;
+        PlayerPrefs.SetInt(totalEarnedKey, totalEarned);
+        PlayerPrefs.Save();
+        
+        NotifyMoneyChanged();
+        SaveMoneyToPlayerPrefs(); // Anında kaydet
+    }
+    
+    /// <summary>
+    /// Para çıkar (tüm UI'ları otomatik günceller)
+    /// </summary>
+    public bool SpendMoney(int amount)
+    {
+        if (money >= amount)
+        {
+            money -= amount;
+            NotifyMoneyChanged();
+            SaveMoneyToPlayerPrefs(); // Anında kaydet
+            return true;
+        }
+        return false;
+    }
+    
+    /// <summary>
+    /// Para'yı PlayerPrefs'e kaydet
+    /// </summary>
+    private void SaveMoneyToPlayerPrefs()
+    {
+        PlayerPrefs.SetInt(moneyKey, money);
+        PlayerPrefs.Save();
+        Debug.Log($"[InventoryManager] 💾 Money saved to PlayerPrefs: ${money}");
+    }
+    
+    /// <summary>
+    /// PlayerPrefs'ten para'yı yükle
+    /// </summary>
+    private void LoadMoneyFromPlayerPrefs()
+    {
+        if (PlayerPrefs.HasKey(moneyKey))
+        {
+            money = PlayerPrefs.GetInt(moneyKey, 0);
+            Debug.Log($"[InventoryManager] 📂 Money loaded from PlayerPrefs: ${money}");
+        }
+        else
+        {
+            money = 0;
+            Debug.Log("[InventoryManager] 📂 No saved money found, starting with $0");
+        }
+    }
+    
+    /// <summary>
+    /// Toplam kazanılan parayı al (oyun başından beri)
+    /// </summary>
+    public int GetTotalEarnedMoney()
+    {
+        return PlayerPrefs.GetInt(totalEarnedKey, 0);
+    }
+    
+    /// <summary>
+    /// Para'yı sıfırla (yeni oyun için)
+    /// </summary>
+    public void ResetMoney()
+    {
+        money = 0;
+        PlayerPrefs.SetInt(moneyKey, 0);
+        PlayerPrefs.SetInt(totalEarnedKey, 0);
+        PlayerPrefs.Save();
+        NotifyMoneyChanged();
+        Debug.Log("[InventoryManager] 🔄 Money reset to $0");
+    }
+    
+    /// <summary>
+    /// Para değiştiğinde tüm UI'ları güncelle
+    /// </summary>
+    private void NotifyMoneyChanged()
+    {
+        UpdateMoneyUI();
+        
+        // Event'i tetikle
+        int subscriberCount = OnMoneyChanged != null ? OnMoneyChanged.GetInvocationList().Length : 0;
+        Debug.Log($"[InventoryManager] 💰 Money changed to ${money}. Notifying {subscriberCount} subscribers...");
+        
+        OnMoneyChanged?.Invoke(money);
+    }
+    
+    /// <summary>
+    /// Inventory UI'daki para text'ini güncelle
+    /// </summary>
     public void UpdateMoneyUI()
     {
-        if (moneyText == null)
+        if (moneyText != null)
         {
-            return;
+            moneyText.text = "$" + money.ToString();
+            Debug.Log($"[InventoryManager] 💰 Inventory UI updated: ${money}");
         }
-
-        moneyText.text = "$" + money.ToString();
+        else
+        {
+            Debug.LogWarning("[InventoryManager] ⚠️ moneyText is NULL! Cannot update inventory money display.");
+        }
     }
 
     /// <summary>
-    /// Mevcut para miktarını döndürür (DeathScreenUI için)
+    /// Mevcut para miktarını döndürür
     /// </summary>
     public int GetCurrentMoney()
     {
@@ -224,9 +364,8 @@ public class InventoryManager : MonoBehaviour
         }
 
         ScrapData data = collectedScraps[index];
-        money += data.value;
+        AddMoney(data.value);
         collectedScraps.RemoveAt(index);
-        UpdateMoneyUI();
         RefreshInventoryUI();
     }
     
@@ -254,8 +393,7 @@ public class InventoryManager : MonoBehaviour
             }
         }
         
-        money += totalEarnings;
-        UpdateMoneyUI();
+        AddMoney(totalEarnings);
         RefreshInventoryUI();
     }
 
@@ -290,8 +428,7 @@ public class InventoryManager : MonoBehaviour
             totalEarnings += earnings;
         }
 
-        money += totalEarnings;
-        UpdateMoneyUI();
+        AddMoney(totalEarnings);
     }
 
     /// <summary>

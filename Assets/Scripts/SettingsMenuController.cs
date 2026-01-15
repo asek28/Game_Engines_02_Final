@@ -318,6 +318,12 @@ public class SettingsMenuController : MonoBehaviour
             }
         }
         
+        // MusicManager'a da uygula (eğer varsa)
+        if (MusicManager.Instance != null)
+        {
+            MusicManager.Instance.SetVolume(volume);
+        }
+        
         // PlayerPrefs'e kaydet
         PlayerPrefs.SetFloat(musicVolumeKey, volume);
         PlayerPrefs.Save();

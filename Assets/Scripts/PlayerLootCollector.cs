@@ -50,6 +50,18 @@ public class PlayerLootCollector : MonoBehaviour
         playerTransform = transform;
         SetupUI();
         SetupAudio();
+        
+        Debug.Log("[PlayerLootCollector] Awake complete! Starting loot detection...");
+    }
+    
+    private void OnEnable()
+    {
+        Debug.Log("[PlayerLootCollector] Component ENABLED!");
+    }
+    
+    private void OnDisable()
+    {
+        Debug.Log("[PlayerLootCollector] Component DISABLED!");
     }
     
     /// <summary>
@@ -117,58 +129,69 @@ public class PlayerLootCollector : MonoBehaviour
     /// </summary>
     private void SetupUI()
     {
-        // Canvas'ı bul veya oluştur
-        uiCanvas = FindFirstObjectByType<Canvas>();
+        // Canvas'ı bul - Screen Space Overlay olanı tercih et
+        Canvas[] allCanvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        foreach (Canvas canvas in allCanvases)
+        {
+            if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            {
+                uiCanvas = canvas;
+                Debug.Log($"[PlayerLootCollector] Found existing ScreenSpace Overlay Canvas: {uiCanvas.name}");
+                break;
+            }
+        }
+        
+        // Canvas yoksa oluştur
         if (uiCanvas == null)
         {
-            // Canvas yoksa oluştur
             GameObject canvasObject = new GameObject("LootCollectorCanvas");
             uiCanvas = canvasObject.AddComponent<Canvas>();
             uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            uiCanvas.sortingOrder = 999; // En üstte
             canvasObject.AddComponent<UnityEngine.UI.CanvasScaler>();
             canvasObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            
+            Debug.Log("[PlayerLootCollector] Created new LootCollectorCanvas with sortingOrder=999");
+        }
+        else
+        {
+            Debug.Log($"[PlayerLootCollector] Using Canvas: {uiCanvas.name}, sortingOrder: {uiCanvas.sortingOrder}");
         }
         
         // Eğer interactPromptText atanmamışsa oluştur
         if (interactPromptText == null)
         {
-            // Canvas içinde mevcut bir text var mı kontrol et
-            interactPromptText = uiCanvas.GetComponentInChildren<TextMeshProUGUI>();
+            // Yeni bir GameObject oluştur (var olanı kullanma, çünkü başka UI'larla karışabilir)
+            interactPromptObject = new GameObject("LootInteractPrompt");
+            interactPromptObject.transform.SetParent(uiCanvas.transform, false);
             
-            if (interactPromptText == null)
-            {
-                // Yeni bir GameObject oluştur
-                interactPromptObject = new GameObject("InteractPrompt");
-                interactPromptObject.transform.SetParent(uiCanvas.transform, false);
-                
-                // RectTransform ayarla
-                RectTransform rectTransform = interactPromptObject.AddComponent<RectTransform>();
-                rectTransform.anchorMin = uiPosition;
-                rectTransform.anchorMax = uiPosition;
-                rectTransform.pivot = new Vector2(0.5f, 0.5f);
-                rectTransform.anchoredPosition = Vector2.zero;
-                rectTransform.sizeDelta = new Vector2(300f, 50f);
-                
-                // TextMeshProUGUI ekle
-                interactPromptText = interactPromptObject.AddComponent<TextMeshProUGUI>();
-                interactPromptText.text = interactPromptMessage;
-                interactPromptText.fontSize = 24f;
-                interactPromptText.alignment = TextAlignmentOptions.Center;
-                interactPromptText.color = Color.white;
-                
-                // Outline ekle (görünürlük için)
-                UnityEngine.UI.Outline outline = interactPromptObject.AddComponent<UnityEngine.UI.Outline>();
-                outline.effectColor = Color.black;
-                outline.effectDistance = new Vector2(2f, -2f);
-            }
-            else
-            {
-                interactPromptObject = interactPromptText.gameObject;
-            }
+            // RectTransform ayarla
+            RectTransform rectTransform = interactPromptObject.AddComponent<RectTransform>();
+            rectTransform.anchorMin = uiPosition;
+            rectTransform.anchorMax = uiPosition;
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            rectTransform.anchoredPosition = Vector2.zero;
+            rectTransform.sizeDelta = new Vector2(500f, 80f); // Daha büyük alan
+            
+            // TextMeshProUGUI ekle
+            interactPromptText = interactPromptObject.AddComponent<TextMeshProUGUI>();
+            interactPromptText.text = interactPromptMessage;
+            interactPromptText.fontSize = 24f;
+            interactPromptText.alignment = TextAlignmentOptions.Center;
+            interactPromptText.color = Color.white;
+            interactPromptText.raycastTarget = false; // Mouse event'leri engellemesin
+            
+            // Outline ekle (görünürlük için)
+            UnityEngine.UI.Outline outline = interactPromptObject.AddComponent<UnityEngine.UI.Outline>();
+            outline.effectColor = Color.black;
+            outline.effectDistance = new Vector2(3f, -3f);
+            
+            Debug.Log($"[PlayerLootCollector] Created LootInteractPrompt UI at position {uiPosition}");
         }
         else
         {
             interactPromptObject = interactPromptText.gameObject;
+            Debug.Log($"[PlayerLootCollector] Using assigned InteractPrompt: {interactPromptObject.name}");
         }
         
         // Başlangıçta gizle
@@ -206,6 +229,8 @@ public class PlayerLootCollector : MonoBehaviour
     {
         if (interactPromptObject == null || interactPromptText == null)
         {
+            Debug.LogWarning("[PlayerLootCollector] InteractPrompt UI is null! Re-creating...");
+            SetupUI();
             return;
         }
         
@@ -215,6 +240,11 @@ public class PlayerLootCollector : MonoBehaviour
         if (interactPromptObject.activeSelf != shouldShow)
         {
             interactPromptObject.SetActive(shouldShow);
+            
+            if (shouldShow)
+            {
+                Debug.Log($"[PlayerLootCollector] Showing interact prompt! Nearby loots: {nearbyLoots.Count}");
+            }
         }
         
         // Eğer birden fazla loot varsa, en yakın olanı göster
@@ -228,13 +258,16 @@ public class PlayerLootCollector : MonoBehaviour
             if (nearestLoot != null)
             {
                 string itemName = nearestLoot.GetItemDisplayName();
+                LootRarity rarity = nearestLoot.GetRarity();
+                string tierText = $"Tier {(int)rarity + 1}"; // Tier1=1, Tier2=2, Tier3=3
+                
                 if (!string.IsNullOrEmpty(itemName))
                 {
-                    interactPromptText.text = $"{interactPromptMessage} ({itemName})";
+                    interactPromptText.text = $"Press E to Collect\n<color=yellow>{itemName}</color> ({tierText})";
                 }
                 else
                 {
-                    interactPromptText.text = interactPromptMessage;
+                    interactPromptText.text = $"{interactPromptMessage} ({tierText})";
                 }
             }
         }
@@ -254,6 +287,7 @@ public class PlayerLootCollector : MonoBehaviour
             }
         }
         
+        int previousCount = nearbyLoots.Count;
         nearbyLoots.Clear();
         
         // Tüm loot'ları bul
@@ -278,6 +312,12 @@ public class PlayerLootCollector : MonoBehaviour
                     loot.SetPlayerInRange(true);
                 }
             }
+        }
+        
+        // Debug: loot sayısı değiştiyse logla
+        if (nearbyLoots.Count != previousCount)
+        {
+            Debug.Log($"[PlayerLootCollector] Nearby loots changed: {previousCount} → {nearbyLoots.Count}");
         }
     }
     
