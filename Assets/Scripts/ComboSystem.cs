@@ -8,6 +8,7 @@ public class ComboSystem : MonoBehaviour
 	
 	private Animator anim;
 	private AudioSource audioSource;
+	private PlayerAnimationController playerAnimController;
 
 	[Header("Combo Settings")]
 	[Tooltip("Time window to chain next hit before combo resets (seconds)")]
@@ -29,6 +30,16 @@ public class ComboSystem : MonoBehaviour
 	void Start()
 	{
 		anim = GetComponent<Animator>();
+		playerAnimController = GetComponent<PlayerAnimationController>();
+		
+		if (playerAnimController == null)
+		{
+			Debug.LogWarning("[ComboSystem] PlayerAnimationController not found! isStanding won't work.");
+		}
+		else
+		{
+			Debug.Log("[ComboSystem] PlayerAnimationController found!");
+		}
 
 		audioSource = hitAudioSource;
 		if (audioSource == null)
@@ -49,27 +60,51 @@ public class ComboSystem : MonoBehaviour
 	
 	void Update()
 	{
+		// Inventory açıksa saldırı yapma
 		if (InventoryManager.instance != null && InventoryManager.instance.IsInventoryVisible)
 		{
 			return;
 		}
 		
+		// Settings paneli açıksa saldırı yapma
+		SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
+		if (settingsMenu != null && settingsMenu.IsSettingsOpen())
+		{
+			return;
+		}
 		
+		// Input kontrolü (önce tanımla)
 		bool attackPressed = false;
 		
 		var keyboard = Keyboard.current;
 		var mouse = Mouse.current;
 		
-		
 		if (mouse != null)
 		{
 			attackPressed = mouse.leftButton.wasPressedThisFrame;
 		}
-		
 		else if (keyboard != null)
 		{
 			attackPressed = keyboard.enterKey.wasPressedThisFrame;
 		}
+		
+		// Sadece MeleeWeapon aktifken combo sistemi çalışsın
+		WeaponSlotSystem weaponSlotSystem = FindFirstObjectByType<WeaponSlotSystem>();
+		if (weaponSlotSystem != null)
+		{
+			IWeapon currentWeapon = weaponSlotSystem.GetCurrentWeapon();
+			if (currentWeapon == null || !(currentWeapon is MeleeWeapon))
+			{
+				// Gun veya başka silah aktifse combo sistemi çalışmasın
+				return;
+			}
+			// Debug: Stick aktif ve attack basıldı
+			if (currentWeapon is MeleeWeapon && attackPressed)
+			{
+				Debug.Log($"[ComboSystem] MeleeWeapon active, attack pressed!");
+			}
+		}
+		
 		
 		
 		if (anim != null)
@@ -103,9 +138,20 @@ public class ComboSystem : MonoBehaviour
 				comboCount = 3;
 			}
 			
-			Debug.Log($"Attack pressed! Combo Count: {comboCount}, Is Attacking: {isAttacking}");
+			Debug.Log($"[ComboSystem] Attack pressed! Combo Count: {comboCount}, Is Attacking: {isAttacking}");
 			
+			// PlayerAnimationController ile isStanding parametresini set et (Stick attack)
+			if (playerAnimController != null)
+			{
+				playerAnimController.SetStanding(true);
+				Debug.Log($"[ComboSystem] Called SetStanding(true)");
+			}
+			else
+			{
+				Debug.LogWarning($"[ComboSystem] PlayerAnimationController is NULL! Can't set isStanding!");
+			}
 			
+			// Eski animator sistemi (ComboCount parametresi)
 			if (anim != null)
 			{
 				anim.SetInteger("ComboCount", comboCount);
@@ -131,6 +177,12 @@ public class ComboSystem : MonoBehaviour
 		{
 			comboCount = 0;
 			lastComboTime = Time.time;
+			
+			// isStanding animasyonunu kapat
+			if (playerAnimController != null)
+			{
+				playerAnimController.SetStanding(false);
+			}
 			
 			if (anim != null)
 			{

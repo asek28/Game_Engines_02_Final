@@ -1,139 +1,210 @@
 using UnityEngine;
+using UnityEngine.Events;
 
+/// <summary>
+/// Player health system
+/// Can yönetimi, hasar alma, ölüm
+/// </summary>
 public class PlayerHealth : MonoBehaviour
 {
     [Header("Health Settings")]
     [Tooltip("Maksimum can")]
-    [SerializeField, Min(1)] private int maxHealth = 10;
-    [Tooltip("Mevcut can")]
-    [SerializeField] private int currentHealth;
+    [SerializeField] private int maxHealth = 100;
     
-    [Header("Death Settings")]
-    [Tooltip("Ölüm sonrası respawn süresi (saniye)")]
-    [SerializeField] private float respawnDelay = 3f;
+    [Tooltip("Başlangıç canı (maxHealth'den farklı olabilir)")]
+    [SerializeField] private int startHealth = 100;
     
+    [Header("Damage Feedback")]
+    [Tooltip("Hasar aldığında ekran kırmızı yanıp söner mi?")]
+    [SerializeField] private bool enableDamageFlash = true;
+    
+    [Tooltip("Hasar efekti süresi")]
+    [SerializeField] private float damageFlashDuration = 0.2f;
+    
+    [Tooltip("Hasar sesi")]
+    [SerializeField] private AudioClip damageSound;
+    
+    [Tooltip("Ölüm sesi")]
+    [SerializeField] private AudioClip deathSound;
+    
+    [Header("Regeneration (Opsiyonel)")]
+    [Tooltip("Can yenilensin mi?")]
+    [SerializeField] private bool enableRegeneration = false;
+    
+    [Tooltip("Saniyede yenilenen can")]
+    [SerializeField] private float regenPerSecond = 1f;
+    
+    [Tooltip("Hasar aldıktan kaç saniye sonra yenilenme başlar")]
+    [SerializeField] private float regenDelay = 5f;
+    
+    [Header("Events")]
+    [Tooltip("Can değiştiğinde tetiklenir (currentHealth, maxHealth)")]
+    public UnityEvent<int, int> OnHealthChanged;
+    
+    [Tooltip("Hasar aldığında tetiklenir (damage)")]
+    public UnityEvent<int> OnDamageTaken;
+    
+    [Tooltip("Öldüğünde tetiklenir")]
+    public UnityEvent OnDeath;
+    
+    // Private variables
+    private int currentHealth;
     private bool isDead = false;
-    private Vector3 spawnPosition;
+    private AudioSource audioSource;
+    private float lastDamageTime;
     
-    // Events
-    public System.Action<int, int> OnHealthChanged; // (currentHealth, maxHealth)
-    public System.Action OnPlayerDeath;
-    public System.Action OnPlayerRespawn;
+    // Public getters
+    public int CurrentHealth => currentHealth;
+    public int MaxHealth => maxHealth;
+    public bool IsDead => isDead;
+    public float HealthPercentage => (float)currentHealth / maxHealth;
     
     private void Awake()
     {
-        currentHealth = maxHealth;
-        spawnPosition = transform.position;
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+        }
     }
     
     private void Start()
     {
-        // Health değişikliğini bildir
+        // Başlangıç canı
+        currentHealth = Mathf.Clamp(startHealth, 0, maxHealth);
+        
+        // Event tetikle (healthbar güncellenir)
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        
+        Debug.Log($"[PlayerHealth] Initialized: {currentHealth}/{maxHealth} HP");
     }
     
+    private void Update()
+    {
+        // Can yenilenme
+        if (enableRegeneration && !isDead && currentHealth < maxHealth)
+        {
+            if (Time.time - lastDamageTime >= regenDelay)
+            {
+                Heal((int)(regenPerSecond * Time.deltaTime));
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Hasar al
+    /// </summary>
     public void TakeDamage(int damage)
     {
-        if (isDead)
-        {
-            return;
-        }
+        if (isDead) return;
         
         currentHealth -= damage;
         currentHealth = Mathf.Max(0, currentHealth);
+        lastDamageTime = Time.time;
         
-        Debug.Log($"[PlayerHealth] Took {damage} damage! Current health: {currentHealth}/{maxHealth}");
+        Debug.Log($"<color=red>[PlayerHealth] Took {damage} damage! Health: {currentHealth}/{maxHealth}</color>");
         
-        // Health değişikliğini bildir
+        // Event'leri tetikle
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        OnDamageTaken?.Invoke(damage);
         
-        // Can 0 oldu mu kontrol et
+        // Ses efekti
+        if (audioSource != null && damageSound != null)
+        {
+            audioSource.PlayOneShot(damageSound);
+        }
+        
+        // Damage flash (ekran kırmızı yanıp söner)
+        if (enableDamageFlash)
+        {
+            StartCoroutine(DamageFlashCoroutine());
+        }
+        
+        // Ölüm kontrolü
         if (currentHealth <= 0)
         {
             Die();
         }
     }
     
+    /// <summary>
+    /// Can kazan (heal)
+    /// </summary>
     public void Heal(int amount)
     {
-        if (isDead)
-        {
-            return;
-        }
+        if (isDead) return;
         
         currentHealth += amount;
-        currentHealth = Mathf.Min(maxHealth, currentHealth);
+        currentHealth = Mathf.Min(currentHealth, maxHealth);
         
-        Debug.Log($"[PlayerHealth] Healed {amount}! Current health: {currentHealth}/{maxHealth}");
+        Debug.Log($"<color=green>[PlayerHealth] Healed {amount}! Health: {currentHealth}/{maxHealth}</color>");
         
-        // Health değişikliğini bildir
+        // Event tetikle
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
     
+    /// <summary>
+    /// Canı tam doldur
+    /// </summary>
+    public void HealFull()
+    {
+        Heal(maxHealth - currentHealth);
+    }
+    
+    /// <summary>
+    /// Öldür
+    /// </summary>
     private void Die()
     {
-        if (isDead)
-        {
-            return;
-        }
+        if (isDead) return;
         
         isDead = true;
-        Debug.Log($"[PlayerHealth] Player died!");
         
-        // Death event'ini tetikle
-        OnPlayerDeath?.Invoke();
+        Debug.Log("<color=red>[PlayerHealth] Player DIED!</color>");
         
-        // Hareketi durdur
-        SimplePlayerMovement movement = GetComponent<SimplePlayerMovement>();
-        if (movement != null)
+        // Ölüm sesi
+        if (audioSource != null && deathSound != null)
         {
-            movement.enabled = false;
+            audioSource.PlayOneShot(deathSound);
         }
         
-        // Respawn'ı başlat
-        Invoke(nameof(Respawn), respawnDelay);
+        // Event tetikle
+        OnDeath?.Invoke();
+        
+        // Burada ölüm animasyonu, game over ekranı, vb. eklenebilir
     }
     
-    private void Respawn()
+    /// <summary>
+    /// Damage flash coroutine (ekran kırmızı yanıp söner)
+    /// </summary>
+    private System.Collections.IEnumerator DamageFlashCoroutine()
     {
-        isDead = false;
-        currentHealth = maxHealth;
-        transform.position = spawnPosition;
+        // Burada CanvasGroup veya Image kullanarak ekran kırmızı yapılabilir
+        // Şimdilik basit log
+        Debug.Log("<color=red>[PlayerHealth] 💥 Damage Flash!</color>");
         
-        Debug.Log($"[PlayerHealth] Player respawned!");
+        yield return new WaitForSeconds(damageFlashDuration);
         
-        // Hareketi tekrar etkinleştir
-        SimplePlayerMovement movement = GetComponent<SimplePlayerMovement>();
-        if (movement != null)
-        {
-            movement.enabled = true;
-        }
-        
-        // Health değişikliğini bildir
+        // Flash bitişi
+    }
+    
+    /// <summary>
+    /// Canı set et (debug/cheat için)
+    /// </summary>
+    public void SetHealth(int health)
+    {
+        currentHealth = Mathf.Clamp(health, 0, maxHealth);
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
-        
-        // Respawn event'ini tetikle
-        OnPlayerRespawn?.Invoke();
     }
     
-    public int GetCurrentHealth()
+    /// <summary>
+    /// Maksimum canı değiştir
+    /// </summary>
+    public void SetMaxHealth(int newMaxHealth)
     {
-        return currentHealth;
-    }
-    
-    public int GetMaxHealth()
-    {
-        return maxHealth;
-    }
-    
-    public bool IsDead()
-    {
-        return isDead;
-    }
-    
-    public void SetSpawnPosition(Vector3 position)
-    {
-        spawnPosition = position;
+        maxHealth = Mathf.Max(1, newMaxHealth);
+        currentHealth = Mathf.Min(currentHealth, maxHealth);
+        OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 }
-

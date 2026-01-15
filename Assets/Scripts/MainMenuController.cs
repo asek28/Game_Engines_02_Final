@@ -18,8 +18,11 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private RawImage settingsButton;
     
     [Header("Settings Panel")]
-    [Tooltip("Settings panel GameObject (açılıp kapanacak)")]
+    [Tooltip("Settings panel GameObject (açılıp kapanacak) - LEGACY kullanımı için")]
     [SerializeField] private GameObject settingsPanel;
+    
+    [Tooltip("SettingsMenuController referansı (ESC ve panel kontrolü için)")]
+    [SerializeField] private SettingsMenuController settingsMenuController;
     
     [Tooltip("Settings panel açık mı?")]
     [SerializeField] private bool isSettingsOpen = false;
@@ -49,16 +52,34 @@ public class MainMenuController : MonoBehaviour
         {
             settingsPanel.SetActive(false);
             isSettingsOpen = false;
+            Debug.Log("[MainMenu] Settings panel initialized as closed.");
         }
     }
     
     private void Start()
     {
+        Debug.Log("[MainMenu] Start() called!");
+        
+        // Settings panelini zorla kapat (başlangıçta kapalı olmalı)
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+            isSettingsOpen = false;
+            Debug.Log("[MainMenu] Settings panel force closed in Start().");
+        }
+        else
+        {
+            Debug.LogWarning("[MainMenu] Settings panel is NULL in Start()!");
+        }
+        
         // Buton event'lerini ayarla
+        Debug.Log("[MainMenu] Calling SetupButtons()...");
         SetupButtons();
         
         // Debug: Button'ların durumunu kontrol et
         DebugButtonStates();
+        
+        Debug.Log("[MainMenu] Start() completed!");
     }
     
     /// <summary>
@@ -68,7 +89,7 @@ public class MainMenuController : MonoBehaviour
     {
         Debug.Log("=== MainMenu Button States ===");
         
-        Canvas canvas = FindObjectOfType<Canvas>();
+        Canvas canvas = FindFirstObjectByType<Canvas>();
         RectTransform canvasRect = canvas != null ? canvas.GetComponent<RectTransform>() : null;
         float canvasWidth = canvasRect != null ? canvasRect.rect.width : Screen.width;
         float canvasHeight = canvasRect != null ? canvasRect.rect.height : Screen.height;
@@ -221,12 +242,14 @@ public class MainMenuController : MonoBehaviour
         // Settings Button
         if (settingsButton != null)
         {
+            Debug.Log("[MainMenu] Setting up Settings button...");
             settingsButton.raycastTarget = true;
             
             Button settingsBtn = settingsButton.GetComponent<Button>();
             if (settingsBtn == null)
             {
                 settingsBtn = settingsButton.gameObject.AddComponent<Button>();
+                Debug.Log("[MainMenu] Added Button component to Settings button.");
             }
             
             settingsBtn.targetGraphic = settingsButton;
@@ -234,18 +257,24 @@ public class MainMenuController : MonoBehaviour
             
             settingsBtn.onClick.RemoveAllListeners();
             settingsBtn.onClick.AddListener(OnSettingsButtonClicked);
+            Debug.Log("[MainMenu] Settings button event added: OnSettingsButtonClicked");
             
             FixButtonRectTransform(settingsButton.rectTransform);
+        }
+        else
+        {
+            Debug.LogError("[MainMenu] Settings button is NULL! Cannot setup settings button.");
         }
     }
     
     /// <summary>
     /// Button olmayan tüm RawImage'ların RaycastTarget'ını kapatır
+    /// SADECE RaycastTarget'ı kapatır, visible/enabled durumunu değiştirmez!
     /// </summary>
     private void DisableNonButtonRaycastTargets()
     {
         // Canvas'ı bul
-        Canvas canvas = FindObjectOfType<Canvas>();
+        Canvas canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)
         {
             return;
@@ -256,11 +285,16 @@ public class MainMenuController : MonoBehaviour
         
         foreach (RawImage rawImg in allRawImages)
         {
-            // Eğer bu RawImage button değilse, RaycastTarget'ını kapat
+            // Eğer bu RawImage button değilse, SADECE RaycastTarget'ını kapat
+            // (görünürlüğünü değiştirme!)
             if (rawImg != playButton && rawImg != quitButton && rawImg != settingsButton)
             {
-                rawImg.raycastTarget = false;
-                Debug.Log($"[MainMenu] Disabled RaycastTarget for: {rawImg.gameObject.name}");
+                // RaycastTarget'ı kapat ama görünürlüğü koru
+                if (rawImg.raycastTarget)
+                {
+                    rawImg.raycastTarget = false;
+                    Debug.Log($"[MainMenu] Disabled RaycastTarget (but kept visible): {rawImg.gameObject.name}");
+                }
             }
         }
         
@@ -273,7 +307,11 @@ public class MainMenuController : MonoBehaviour
                 img.transform.parent != null && 
                 img.transform.parent.GetComponent<Button>() == null)
             {
-                img.raycastTarget = false;
+                // SADECE RaycastTarget'ı kapat, görünürlüğü koru
+                if (img.raycastTarget)
+                {
+                    img.raycastTarget = false;
+                }
             }
         }
     }
@@ -488,10 +526,11 @@ public class MainMenuController : MonoBehaviour
     /// </summary>
     public void OnSettingsButtonClicked()
     {
+        Debug.Log("[MainMenu] Settings button clicked!");
         PlayButtonSound();
         
-        // Settings panelini aç/kapat
-        ToggleSettingsPanel();
+        // MainMenu'de her zaman aç (toggle değil, sadece aç)
+        OpenSettingsPanel();
     }
     
     /// <summary>
@@ -499,16 +538,21 @@ public class MainMenuController : MonoBehaviour
     /// </summary>
     public void ToggleSettingsPanel()
     {
+        // MainMenu'de basit toggle kullan (SettingsMenuController karmaşık)
         if (settingsPanel == null)
         {
             Debug.LogWarning("[MainMenu] Settings panel is not assigned!");
             return;
         }
         
-        isSettingsOpen = !isSettingsOpen;
-        settingsPanel.SetActive(isSettingsOpen);
+        // Panel'in gerçek durumuna bak (state değişkeni yerine)
+        bool currentlyActive = settingsPanel.activeSelf;
+        bool newState = !currentlyActive;
         
-        Debug.Log($"[MainMenu] Settings panel {(isSettingsOpen ? "opened" : "closed")}.");
+        settingsPanel.SetActive(newState);
+        isSettingsOpen = newState;
+        
+        Debug.Log($"[MainMenu] Settings panel toggle: was {currentlyActive}, now {newState}");
     }
     
     /// <summary>
@@ -516,10 +560,24 @@ public class MainMenuController : MonoBehaviour
     /// </summary>
     public void OpenSettingsPanel()
     {
+        Debug.Log("[MainMenu] OpenSettingsPanel() called!");
+        
         if (settingsPanel != null)
         {
+            Debug.Log($"[MainMenu] Opening settings panel: {settingsPanel.name}");
             settingsPanel.SetActive(true);
             isSettingsOpen = true;
+            
+            // MainMenu butonlarının görünür olduğundan emin ol
+            if (playButton != null) playButton.gameObject.SetActive(true);
+            if (quitButton != null) quitButton.gameObject.SetActive(true);
+            if (settingsButton != null) settingsButton.gameObject.SetActive(true);
+            
+            Debug.Log("[MainMenu] Settings panel opened, main menu buttons kept visible.");
+        }
+        else
+        {
+            Debug.LogError("[MainMenu] Settings panel is NULL! Cannot open settings.");
         }
     }
     
@@ -530,8 +588,16 @@ public class MainMenuController : MonoBehaviour
     {
         if (settingsPanel != null)
         {
+            Debug.Log($"[MainMenu] Closing settings panel: {settingsPanel.name}");
             settingsPanel.SetActive(false);
             isSettingsOpen = false;
+            
+            // MainMenu butonlarının görünür olduğundan emin ol
+            if (playButton != null) playButton.gameObject.SetActive(true);
+            if (quitButton != null) quitButton.gameObject.SetActive(true);
+            if (settingsButton != null) settingsButton.gameObject.SetActive(true);
+            
+            Debug.Log("[MainMenu] Settings panel closed, main menu buttons restored.");
         }
     }
     

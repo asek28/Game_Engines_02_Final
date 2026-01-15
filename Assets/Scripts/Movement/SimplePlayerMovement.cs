@@ -32,6 +32,19 @@ public class SimplePlayerMovement : MonoBehaviour
     {
         if (controller == null) return;
         
+        // Settings paneli açıksa hareket etme
+        SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
+        if (settingsMenu != null && settingsMenu.IsSettingsOpen())
+        {
+            return;
+        }
+        
+        // Inventory açıksa hareket etme
+        if (InventoryManager.instance != null && InventoryManager.instance.IsInventoryVisible)
+        {
+            return;
+        }
+        
         // Get input using Input System
         float rotationInput = 0f;
         float forwardInput = 0f;
@@ -45,6 +58,12 @@ public class SimplePlayerMovement : MonoBehaviour
             forwardInput  = (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0);
             horizontalInput = (keyboard.dKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed ? 1 : 0);
             sprintPressed = keyboard.leftShiftKey.isPressed;
+            
+            // Debug: Shift tuşu kontrolü
+            if (sprintPressed && forwardInput > 0)
+            {
+                Debug.Log($"<color=cyan>[SimplePlayerMovement] Shift pressed! forwardInput: {forwardInput}</color>");
+            }
         }
         else
         {
@@ -105,7 +124,17 @@ public class SimplePlayerMovement : MonoBehaviour
         }
         
         
+        bool previousRunning = isRunning;
         isRunning = sprintPressed && move.sqrMagnitude > 0.1f;
+        
+        // Debug: isRunning değişimi (daha detaylı)
+        if (previousRunning != isRunning)
+        {
+            Debug.Log($"<color=yellow>[SimplePlayerMovement] isRunning = {isRunning}</color>");
+            Debug.Log($"   - sprintPressed: {sprintPressed}");
+            Debug.Log($"   - move.sqrMagnitude: {move.sqrMagnitude:F2}");
+            Debug.Log($"   - forwardInput: {forwardInput}, horizontalInput: {horizontalInput}");
+        }
     }
     
     // AnimationController

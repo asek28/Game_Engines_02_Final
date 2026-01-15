@@ -2,6 +2,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+public enum LootRarity
+{
+    Tier1,  // En yaygın
+    Tier2,  // Orta nadirlik
+    Tier3   // En nadir
+}
+
 [RequireComponent(typeof(Collider))]
 public class Loot : MonoBehaviour
 {
@@ -9,6 +16,7 @@ public class Loot : MonoBehaviour
     [SerializeField] private string itemId = "scrap_value5";
     [SerializeField] private string itemDisplayName = "Scrap Value 5";
     [SerializeField, Min(1)] private int scrapValue = 1;
+    [SerializeField] private LootRarity rarity = LootRarity.Tier1;
 
     [Header("Highlight Settings")]
     [SerializeField] private bool useHighlight = true;
@@ -146,6 +154,31 @@ public class Loot : MonoBehaviour
     public int GetScrapValue()
     {
         return scrapValue;
+    }
+    
+    public LootRarity GetRarity()
+    {
+        return rarity;
+    }
+    
+    public void SetRarity(LootRarity newRarity)
+    {
+        rarity = newRarity;
+    }
+    
+    public void SetScrapValue(int newValue)
+    {
+        scrapValue = Mathf.Max(1, newValue);
+    }
+    
+    public void SetItemId(string newItemId)
+    {
+        itemId = newItemId;
+    }
+    
+    public void SetItemDisplayName(string newDisplayName)
+    {
+        itemDisplayName = newDisplayName;
     }
     private void ValidateNaming()
     {

@@ -41,7 +41,7 @@ public class ZeppelinMovement : MonoBehaviour
         currentPosition = startPosition;
         
         // DayNightCycle'i bul
-        dayNightCycle = FindObjectOfType<DayNightCycle>();
+        dayNightCycle = FindFirstObjectByType<DayNightCycle>();
         if (dayNightCycle == null)
         {
             Debug.LogWarning("[ZeppelinMovement] DayNightCycle not found! Zeppelin will not spawn automatically.");

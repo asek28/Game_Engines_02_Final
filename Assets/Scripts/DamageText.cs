@@ -2,59 +2,85 @@ using UnityEngine;
 using TMPro;
 
 /// <summary>
-/// Floating damage text - hasar sayısını gösterir ve yukarı doğru kaybolur
+/// Floating damage text - Hasar sayısını gösterir ve yukarı doğru yüzer
 /// </summary>
+[RequireComponent(typeof(TextMeshPro))]
 public class DamageText : MonoBehaviour
 {
     [Header("Animation Settings")]
-    [Tooltip("Yukarı hareket hızı")]
+    [SerializeField] private float lifetime = 1.5f;
     [SerializeField] private float floatSpeed = 2f;
-    [Tooltip("Fade out süresi (saniye)")]
-    [SerializeField] private float fadeDuration = 1f;
-    [Tooltip("Yaşam süresi (saniye)")]
-    [SerializeField] private float lifetime = 2f;
+    [SerializeField] private float fadeSpeed = 1f;
+    [SerializeField] private Vector3 randomOffset = new Vector3(0.5f, 0.5f, 0.5f);
+    
+    [Header("Text Settings")]
+    [SerializeField] private Color damageColor = Color.red;
+    [SerializeField] private float fontSize = 4f;
     
     private TextMeshPro textMesh;
-    private Vector3 startPosition;
-    private float elapsedTime = 0f;
+    private float timer = 0f;
+    private Vector3 floatDirection;
     
     private void Awake()
     {
         textMesh = GetComponent<TextMeshPro>();
-        if (textMesh == null)
-        {
-            textMesh = GetComponentInChildren<TextMeshPro>();
-        }
         
-        startPosition = transform.position;
+        // Text ayarları
+        textMesh.fontSize = fontSize;
+        textMesh.color = damageColor;
+        textMesh.alignment = TextAlignmentOptions.Center;
+        
+        // Random offset
+        Vector3 randomPos = new Vector3(
+            Random.Range(-randomOffset.x, randomOffset.x),
+            Random.Range(0, randomOffset.y),
+            Random.Range(-randomOffset.z, randomOffset.z)
+        );
+        transform.position += randomPos;
+        
+        // Yukarı doğru float
+        floatDirection = Vector3.up;
     }
     
     private void Start()
     {
-        // Belirli süre sonra yok et
-        Destroy(gameObject, lifetime);
+        // Camera'ya bak
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            transform.LookAt(transform.position + mainCamera.transform.rotation * Vector3.forward, mainCamera.transform.rotation * Vector3.up);
+        }
     }
     
     private void Update()
     {
-        elapsedTime += Time.deltaTime;
-        
-        // Yukarı hareket
-        transform.position = startPosition + Vector3.up * (floatSpeed * elapsedTime);
+        // Yukarı doğru hareket et
+        transform.position += floatDirection * floatSpeed * Time.deltaTime;
         
         // Fade out
-        if (textMesh != null && elapsedTime > fadeDuration * 0.5f)
+        timer += Time.deltaTime;
+        float alpha = Mathf.Lerp(1f, 0f, timer / lifetime);
+        
+        Color currentColor = textMesh.color;
+        currentColor.a = alpha;
+        textMesh.color = currentColor;
+        
+        // Lifetime bitti mi?
+        if (timer >= lifetime)
         {
-            float alpha = 1f - ((elapsedTime - fadeDuration * 0.5f) / (fadeDuration * 0.5f));
-            alpha = Mathf.Clamp01(alpha);
-            Color color = textMesh.color;
-            color.a = alpha;
-            textMesh.color = color;
+            Destroy(gameObject);
+        }
+        
+        // Camera'ya bak (her frame)
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            transform.LookAt(transform.position + mainCamera.transform.rotation * Vector3.forward, mainCamera.transform.rotation * Vector3.up);
         }
     }
     
     /// <summary>
-    /// Damage değerini set eder
+    /// Hasar miktarını set et
     /// </summary>
     public void SetDamage(int damage)
     {
@@ -65,7 +91,7 @@ public class DamageText : MonoBehaviour
     }
     
     /// <summary>
-    /// Damage değerini ve rengini set eder
+    /// Hasar miktarını ve rengini set et
     /// </summary>
     public void SetDamage(int damage, Color color)
     {
@@ -76,4 +102,3 @@ public class DamageText : MonoBehaviour
         }
     }
 }
-

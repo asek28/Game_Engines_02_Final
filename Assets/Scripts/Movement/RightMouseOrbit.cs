@@ -72,10 +72,12 @@ public class RightMouseOrbit : MonoBehaviour
 		// Başlangıç rotasyonunu ayarla
 		targetRotation = Quaternion.Euler(pitch, yaw, 0f);
 
-		// FPS cursor kilitleme
-		if (lockCursorOnStart)
+		// FPS cursor kilitleme - her durumda kilitle
+		// (lockCursorOnStart true ise veya oyun scene'indeyse)
+		if (lockCursorOnStart || !IsMainMenuScene())
 		{
-			LockCursor();
+			// Kısa bir gecikmeyle kilitle (UI'ın kurulmasını bekle)
+			Invoke(nameof(LockCursorDelayed), 0.1f);
 		}
 
 		// Baş kemiğini bul
@@ -87,24 +89,61 @@ public class RightMouseOrbit : MonoBehaviour
 			UpdateCameraPosition();
 		}
 	}
+	
+	/// <summary>
+	/// Gecikmeyle cursor'ı kilitle (scene başlangıcında UI'ın kurulmasını bekle)
+	/// </summary>
+	private void LockCursorDelayed()
+	{
+		// Settings veya Inventory açık değilse kilitle
+		SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
+		bool isSettingsOpen = settingsMenu != null && settingsMenu.IsSettingsOpen();
+		bool isInventoryOpen = InventoryManager.instance != null && InventoryManager.instance.IsInventoryVisible;
+		
+		if (!isSettingsOpen && !isInventoryOpen)
+		{
+			LockCursor();
+			Debug.Log("[RightMouseOrbit] Cursor locked on scene start.");
+		}
+	}
+	
+	/// <summary>
+	/// Main Menu scene'inde olup olmadığını kontrol eder
+	/// </summary>
+	private bool IsMainMenuScene()
+	{
+		string sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+		return sceneName.ToLower().Contains("menu");
+	}
 
 	void Update()
 	{
+		// Settings veya Inventory açıksa cursor kontrolü yapma
+		SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
+		bool isSettingsOpen = settingsMenu != null && settingsMenu.IsSettingsOpen();
+		bool isInventoryOpen = InventoryManager.instance != null && InventoryManager.instance.IsInventoryVisible;
+		
 		// ESC ile cursor kilidini aç/kapat
+		// ÖNEMLI: Settings menüsü açıksa ESC tuşunu yakalama (settings menüsü öncelikli)
 		if (unlockCursorOnEscape && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
 		{
-			if (isCursorLocked)
+			// Eğer settings menüsü veya inventory açıksa, cursor kontrolünü yapma
+			if (!isSettingsOpen && !isInventoryOpen)
 			{
-				UnlockCursor();
-			}
-			else
-			{
-				LockCursor();
+				if (isCursorLocked)
+				{
+					UnlockCursor();
+				}
+				else
+				{
+					LockCursor();
+				}
 			}
 		}
 
-		// Mouse sol tık ile cursor kilitleme
-		if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !isCursorLocked)
+		// Mouse sol tık ile cursor kilitleme (eğer settings veya inventory açık değilse)
+		if (!isSettingsOpen && !isInventoryOpen && 
+		    Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !isCursorLocked)
 		{
 			LockCursor();
 		}
@@ -161,6 +200,13 @@ public class RightMouseOrbit : MonoBehaviour
 
 		// Cursor kilitli değilse kamera kontrolü yapma
 		if (!isCursorLocked) return;
+		
+		// Settings paneli açıksa kamera kontrolü yapma
+		SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
+		if (settingsMenu != null && settingsMenu.IsSettingsOpen())
+		{
+			return;
+		}
 
 		var mouse = Mouse.current;
 		if (mouse == null) return;
@@ -232,6 +278,14 @@ public class RightMouseOrbit : MonoBehaviour
 		Cursor.visible = false;
 		isCursorLocked = true;
 	}
+	
+	/// <summary>
+	/// Cursor'ı kilitle (public - diğer script'lerden çağrılabilir)
+	/// </summary>
+	public void LockCursorPublic()
+	{
+		LockCursor();
+	}
 
 	/// <summary>
 	/// Cursor kilidini aç (menü modu)
@@ -241,5 +295,13 @@ public class RightMouseOrbit : MonoBehaviour
 		Cursor.lockState = CursorLockMode.None;
 		Cursor.visible = true;
 		isCursorLocked = false;
+	}
+	
+	/// <summary>
+	/// Cursor kilidini aç (public - diğer script'lerden çağrılabilir)
+	/// </summary>
+	public void UnlockCursorPublic()
+	{
+		UnlockCursor();
 	}
 }

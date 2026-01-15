@@ -3,9 +3,8 @@ using UnityEngine;
 
 public enum EnemyType
 {
-    PassiveWalker,      // Pasif yürüyen - loot çok aramayan, düz yürüyen
-    PassiveLootCollector, // Pasif loot toplayıcı - sadece loot topluyor, saldırmıyor
-    Aggressive          // Agresif - player'a yaklaşınca saldırıyor
+    Passive,    // Pasif - saldırmayan, sadece yürüyen ve loot toplayan
+    Aggressive  // Agresif - player'a yaklaşınca saldırıyor
 }
 
 [RequireComponent(typeof(CharacterController))]
@@ -14,13 +13,12 @@ public enum EnemyType
 public class Enemy : MonoBehaviour
 {
     [Header("Enemy Type")]
-    [Tooltip("Enemy türü - Pasif yürüyen, Pasif loot toplayıcı, veya Agresif")]
-    [SerializeField] private EnemyType enemyType = EnemyType.PassiveWalker;
+    [Tooltip("Enemy türü - Passive (saldırmayan) veya Aggressive (saldıran)")]
+    [SerializeField] private EnemyType enemyType = EnemyType.Passive;
     [Header("Health Settings")]
     [Tooltip("Maksimum can")]
     [SerializeField, Min(1)] private int maxHealth = 5;
-    [Tooltip("Her vuruşta alınan hasar")]
-    [SerializeField, Min(1)] private int damagePerHit = 1;
+    // damagePerHit kaldırıldı - kullanılmıyor
     [Tooltip("Can 2'ye düşünce koşma hızı çarpanı")]
     [SerializeField, Min(1f)] private float runSpeedMultiplier = 1.5f;
 
@@ -43,8 +41,7 @@ public class Enemy : MonoBehaviour
     [SerializeField, Min(0.5f)] private float walkDuration = 3f;
     [Tooltip("Idle kalma süresi (saniye) - Artık kullanılmıyor")]
     [SerializeField, Min(0.5f)] private float idleDuration = 2f;
-    [Tooltip("Yürüme süresinde rastgelelik - Artık kullanılmıyor")]
-    [SerializeField, Min(0f)] private float walkDurationVariation = 1f;
+    // walkDurationVariation kaldırıldı - kullanılmıyor
     [Tooltip("Idle süresinde rastgelelik - Artık kullanılmıyor")]
     [SerializeField, Min(0f)] private float idleDurationVariation = 0.5f;
     
@@ -56,7 +53,7 @@ public class Enemy : MonoBehaviour
     [Tooltip("Çarpışma sonrası yön değiştirme açısı (derece) - Daha küçük değer = daha yumuşak dönüş")]
     [SerializeField, Range(30f, 90f)] private float collisionTurnAngle = 60f;
     [Tooltip("Dönüş hızı (daha yüksek = daha hızlı döner, daha düşük = daha yumuşak)")]
-    [SerializeField, Min(0.5f)] private float rotationSpeed = 2f;
+    [SerializeField, Min(0.5f)] private float rotationSpeed = 5f;
     
     [Header("Loot Collection Settings")]
     [Tooltip("Loot itemlarını algılama mesafesi")]
@@ -79,12 +76,14 @@ public class Enemy : MonoBehaviour
     [Header("Movement Behavior")]
     [Tooltip("Nadiren yön değiştirme olasılığı - Artık kullanılmıyor (sadece çarpışmada yön değiştirir)")]
     [SerializeField, Range(0f, 1f)] private float randomDirectionChangeChance = 0.1f;
-    [Tooltip("Yön değiştirme kontrol sıklığı - Artık kullanılmıyor")]
-    [SerializeField, Min(0.5f)] private float directionCheckInterval = 2f;
+    // directionCheckInterval kaldırıldı - kullanılmıyor
 
     [Header("References")]
     [Tooltip("Animator component. Eğer boşsa otomatik bulunur.")]
     [SerializeField] private Animator animator;
+    
+    [Tooltip("Enemy Animation Controller component. Eğer boşsa otomatik bulunur.")]
+    [SerializeField] private EnemyAnimationController animationController;
     
     [Header("Juice Settings - Visual & Audio Feedback")]
     [Tooltip("Hit sound effect")]
@@ -119,6 +118,7 @@ public class Enemy : MonoBehaviour
     private int currentHealth;
     private bool isDead = false;
     private bool isRunning = false;
+    private bool isCollectingLoot = false; // Loot toplarken sabit durmak için
     
     // Duvara çarpma algılama için
     private Vector3 lastPosition;
@@ -178,6 +178,21 @@ public class Enemy : MonoBehaviour
             }
         }
         
+        // EnemyAnimationController'ı bul veya ekle
+        if (animationController == null)
+        {
+            animationController = GetComponent<EnemyAnimationController>();
+            if (animationController == null)
+            {
+                animationController = gameObject.AddComponent<EnemyAnimationController>();
+                Debug.Log($"[Enemy] {name}: EnemyAnimationController component added automatically.");
+            }
+        }
+        
+        // EnemyAnimationController'a health bilgisini aktar
+        // EnemyAnimationController'ın kendi health sistemi var, ama Enemy.cs'nin health'ini kullanmalıyız
+        // Bu yüzden EnemyAnimationController'ın health'ini Enemy.cs'den senkronize edeceğiz
+        
         // Rigidbody'yi bul veya ekle (knockback için)
         enemyRigidbody = GetComponent<Rigidbody>();
         if (enemyRigidbody == null)
@@ -221,6 +236,12 @@ public class Enemy : MonoBehaviour
         currentHealth = maxHealth;
         currentForwardDirection = transform.forward;
         
+        // EnemyAnimationController'a başlangıç health'ini aktar
+        if (animationController != null)
+        {
+            animationController.SetHealth(maxHealth);
+        }
+        
         // Player'ı bul (tag ile)
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player != null)
@@ -230,7 +251,7 @@ public class Enemy : MonoBehaviour
         else
         {
             // Tag yoksa SimplePlayerMovement component'ini ara
-            SimplePlayerMovement playerMovement = FindObjectOfType<SimplePlayerMovement>();
+            SimplePlayerMovement playerMovement = FindFirstObjectByType<SimplePlayerMovement>();
             if (playerMovement != null)
             {
                 playerTransform = playerMovement.transform;
@@ -245,21 +266,15 @@ public class Enemy : MonoBehaviour
     {
         switch (enemyType)
         {
-            case EnemyType.PassiveWalker:
-                // Pasif yürüyen - loot aramayı minimize et
-                lootSearchInterval = 10f; // Çok seyrek loot ara
-                lootDetectionRange = 3f; // Daha küçük algılama mesafesi
-                break;
-                
-            case EnemyType.PassiveLootCollector:
-                // Pasif loot toplayıcı - loot aramayı artır
-                lootSearchInterval = 2f; // Daha sık loot ara
-                lootDetectionRange = 8f; // Daha büyük algılama mesafesi
+            case EnemyType.Passive:
+                // Pasif - loot aramayı optimize et
+                lootSearchInterval = 4f; // Orta seviye loot arama
+                lootDetectionRange = 5f;
                 break;
                 
             case EnemyType.Aggressive:
                 // Agresif - player'ı takip et, loot aramayı azalt
-                lootSearchInterval = 6f; // Orta seviye loot arama
+                lootSearchInterval = 6f; // Daha seyrek loot arama
                 lootDetectionRange = 5f;
                 break;
         }
@@ -290,20 +305,16 @@ public class Enemy : MonoBehaviour
             }
         }
         
-        // Pasif loot toplayıcı enemy için - vurulmadıysa loot ara
+        // Pasif enemy için - vurulmadıysa loot ara
         // Agresif enemy için - player yoksa loot ara
         bool shouldSearchLoot = false;
-        if (enemyType == EnemyType.PassiveLootCollector && !hasBeenAttacked)
+        if (enemyType == EnemyType.Passive && !hasBeenAttacked)
         {
             shouldSearchLoot = true;
         }
         else if (enemyType == EnemyType.Aggressive && !isChasingPlayer)
         {
             shouldSearchLoot = true;
-        }
-        else if (enemyType == EnemyType.PassiveWalker)
-        {
-            shouldSearchLoot = true; // Pasif yürüyen de ara ama çok seyrek
         }
         
         // Loot arama
@@ -328,8 +339,8 @@ public class Enemy : MonoBehaviour
         }
 
         // Sürekli yürüme durumunda (idle yok)
-        // Enemy her zaman yürüyor olmalı (ölmediği sürece)
-        if (!isWalking)
+        // Enemy her zaman yürüyor olmalı (ölmediği sürece ve loot toplamıyorsa)
+        if (!isWalking && !isCollectingLoot)
         {
             isWalking = true;
         }
@@ -369,8 +380,8 @@ public class Enemy : MonoBehaviour
                 SetForwardDestination();
             }
         }
-        // Pasif loot toplayıcı - vurulmadıysa loot topla
-        else if (enemyType == EnemyType.PassiveLootCollector && !hasBeenAttacked && currentTargetLoot != null && currentTargetLoot.gameObject != null)
+        // Pasif enemy - vurulmadıysa loot topla
+        else if (enemyType == EnemyType.Passive && !hasBeenAttacked && currentTargetLoot != null && currentTargetLoot.gameObject != null)
         {
             direction = (currentTargetLoot.transform.position - transform.position);
             direction.y = 0f;
@@ -380,7 +391,10 @@ public class Enemy : MonoBehaviour
             // Loot'a ulaşıldı mı kontrol et
             if (distanceToLoot <= lootCollectionRange)
             {
+                // Loot toplarken sabit dur (hareket etme, sadece animasyon çalışsın)
+                isCollectingLoot = true;
                 CollectLoot(currentTargetLoot);
+                isCollectingLoot = false;
                 currentTargetLoot = null;
                 SetForwardDestination();
                 return;
@@ -398,24 +412,27 @@ public class Enemy : MonoBehaviour
         {
             direction = (currentTargetLoot.transform.position - transform.position);
             direction.y = 0f;
-            
+
             float distanceToLoot = direction.magnitude;
-            
+
             // Loot'a ulaşıldı mı kontrol et
             if (distanceToLoot <= lootCollectionRange)
             {
+                // Loot toplarken sabit dur (hareket etme, sadece animasyon çalışsın)
+                isCollectingLoot = true;
                 CollectLoot(currentTargetLoot);
+                isCollectingLoot = false;
                 currentTargetLoot = null;
                 // Düz ileri yürümeye devam et
-                SetForwardDestination();
-                return;
-            }
-            
+            SetForwardDestination();
+            return;
+        }
+
             // Loot çok uzaktaysa hedefi iptal et
             if (distanceToLoot > lootDetectionRange * 2f)
-            {
+        {
                 currentTargetLoot = null;
-                SetForwardDestination();
+            SetForwardDestination();
             }
         }
         else
@@ -431,15 +448,34 @@ public class Enemy : MonoBehaviour
             }
         }
 
-        // Hedefe doğru hareket et
+        // Loot toplarken hareket etme (sadece animasyon çalışsın)
+        if (isCollectingLoot)
+        {
+            return; // Hareket etme, sadece animasyon çalışacak
+        }
+        
+        // Hedefe doğru hareket et (smooth movement için)
         direction.Normalize();
         float currentSpeed = isRunning ? walkSpeed * runSpeedMultiplier : walkSpeed;
-        Vector3 move = direction * currentSpeed * Time.deltaTime;
+        
+        // Smooth movement için velocity kullan (ani hareketleri önlemek için)
+        Vector3 targetVelocity = direction * currentSpeed;
+        Vector3 currentVelocity = velocity;
+        currentVelocity.y = 0f; // Y eksenini hariç tut
+        
+        // Velocity'yi smooth bir şekilde güncelle (ani değişiklikleri önlemek için)
+        float acceleration = 10f; // Hızlanma/duraklama hızı
+        currentVelocity = Vector3.MoveTowards(currentVelocity, targetVelocity, acceleration * Time.deltaTime);
         
         // Hareketi uygula
+        Vector3 move = currentVelocity * Time.deltaTime;
         Vector3 positionBeforeMove = transform.position;
         controller.Move(move);
         Vector3 positionAfterMove = transform.position;
+        
+        // Velocity'yi güncelle (Y ekseni hariç - gravity için ayrı yönetiliyor)
+        velocity.x = currentVelocity.x;
+        velocity.z = currentVelocity.z;
         
         // Yatay hareket miktarını kontrol et (Y eksenini hariç tut)
         Vector3 horizontalMovement = positionAfterMove - positionBeforeMove;
@@ -509,8 +545,15 @@ public class Enemy : MonoBehaviour
             {
                 targetDirection = direction; // Player yönü
                 shouldRotate = true;
-                rotationMultiplier = 1f; // Normal rotation
-            }
+                rotationMultiplier = 3f; // Daha hızlı rotation (player takibi için)
+                
+                // Player'a çok yakınsa (saldırı mesafesinde) daha da hızlı dön
+                float distanceToPlayer = Vector3.Distance(transform.position, playerTransform.position);
+                if (distanceToPlayer <= attackRange * 1.5f)
+                {
+                    rotationMultiplier = 5f; // Çok hızlı rotation (saldırıya hazırlık)
+        }
+    }
             // Loot varsa loot'a doğru dön
             else if (currentTargetLoot != null && !isChasingPlayer)
             {
@@ -539,11 +582,13 @@ public class Enemy : MonoBehaviour
                 }
             }
             
-            // Rotation yapılacaksa yap
+            // Rotation yapılacaksa yap (smooth rotation)
             if (shouldRotate)
             {
                 Quaternion targetRotation = Quaternion.LookRotation(targetDirection);
-                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed * rotationMultiplier);
+                // Smooth rotation için RotateTowards kullan (daha yumuşak dönüş)
+                float rotationStep = rotationSpeed * rotationMultiplier * Time.deltaTime;
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationStep * 60f); // 60f = derece/saniye çarpanı
             }
             // Rotation yapılmayacaksa, sadece forward direction'ı koru (rotation sabit kalır)
         }
@@ -594,13 +639,17 @@ public class Enemy : MonoBehaviour
 
     private void ApplyGravity()
     {
+        // Yer çekimi sadece Y ekseninde uygulanmalı (X ve Z zaten UpdateWalkingState'de uygulanıyor)
         if (controller.isGrounded && velocity.y < 0)
         {
             velocity.y = -2f;
         }
 
         velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
+        
+        // Sadece Y eksenindeki hareketi uygula (yatay hareket zaten UpdateWalkingState'de uygulanıyor)
+        Vector3 verticalMove = new Vector3(0f, velocity.y, 0f) * Time.deltaTime;
+        controller.Move(verticalMove);
     }
 
     private void SearchForLoot()
@@ -689,15 +738,33 @@ public class Enemy : MonoBehaviour
             return;
         }
         
-        // Saldırı animasyonu
-        if (animator != null)
+        // ÖNEMLİ: Saldırıdan önce enemy'yi player'a doğru döndür
+        Vector3 directionToPlayer = (playerTransform.position - transform.position);
+        directionToPlayer.y = 0f; // Y eksenini sıfırla
+        directionToPlayer.Normalize();
+        
+        // Hemen player'a bak (saldırı için kesin rotation)
+        if (directionToPlayer.sqrMagnitude > 0.01f)
         {
-            animator.SetTrigger("Attack");
+            Quaternion targetRotation = Quaternion.LookRotation(directionToPlayer);
+            transform.rotation = targetRotation; // Anında dön (saldırı için)
+            currentForwardDirection = directionToPlayer; // Forward direction'ı da güncelle
+            Debug.Log($"[Enemy] {name}: Rotated to face player before attack.");
+        }
+        
+        // EnemyAnimationController ile saldırı animasyonunu tetikle
+        if (animationController != null)
+        {
+            animationController.PerformAttack();
+        }
+        else
+        {
+            Debug.LogWarning($"[Enemy] {name}: EnemyAnimationController is null, cannot set attack animation!");
         }
         
         // Player'a hasar ver
         PlayerHealth playerHealth = playerTransform.GetComponent<PlayerHealth>();
-        if (playerHealth != null && !playerHealth.IsDead())
+        if (playerHealth != null && !playerHealth.IsDead)
         {
             playerHealth.TakeDamage(attackDamage);
             Debug.Log($"[Enemy] {name}: Attacking player! Damage: {attackDamage}");
@@ -716,6 +783,12 @@ public class Enemy : MonoBehaviour
         if (loot == null || loot.gameObject == null)
         {
             return;
+        }
+        
+        // EnemyAnimationController ile loot bulma animasyonunu tetikle
+        if (animationController != null)
+        {
+            animationController.FoundLoot();
         }
         
         // Loot'tan bilgileri al
@@ -738,21 +811,21 @@ public class Enemy : MonoBehaviour
         // Loot nesnesini yok et
         Destroy(loot.gameObject);
         currentTargetLoot = null;
+        
+        // Loot animasyonunu resetle (isteğe bağlı, animasyon bitince otomatik resetlenebilir)
+        // animationController.ResetLootBool(); // Gerekirse manuel reset
     }
 
     private void UpdateAnimator()
     {
-        if (animator == null)
+        // Walking animasyonunu kontrol et
+        if (animationController != null)
         {
-            return;
+            // Enemy hareket ediyorsa ve ölü değilse Walking = true
+            // Loot toplarken sabit durmalı (Walking = false, Loot animasyonu çalışacak)
+            bool shouldWalk = !isDead && !isCollectingLoot && isWalking;
+            animationController.SetWalking(shouldWalk);
         }
-
-        // Walk parametresini güncelle
-        animator.SetBool("Walk", isWalking);
-
-        // Run parametresini güncelle (düşük can veya player takibi)
-        bool shouldRun = isRunning || (enemyType == EnemyType.Aggressive && isChasingPlayer);
-        animator.SetBool("Run", shouldRun);
     }
 
 
@@ -773,8 +846,8 @@ public class Enemy : MonoBehaviour
         currentHealth -= damage;
         currentHealth = Mathf.Max(0, currentHealth);
         
-        // Pasif loot toplayıcı enemy vurulduğunda, loot toplamayı bırak
-        if (enemyType == EnemyType.PassiveLootCollector && !hasBeenAttacked)
+        // Pasif enemy vurulduğunda, loot toplamayı bırak
+        if (enemyType == EnemyType.Passive && !hasBeenAttacked)
         {
             hasBeenAttacked = true;
             currentTargetLoot = null; // Loot hedefini iptal et
@@ -786,18 +859,21 @@ public class Enemy : MonoBehaviour
         // Visual & Audio Feedback
         ApplyHitFeedback(hitPoint, knockbackDirection, damage);
 
-        // Hit animasyonu trigger'la
-        if (animator != null)
+        // EnemyAnimationController ile hasar animasyonunu tetikle
+        // EnemyAnimationController'ın health'ini Enemy.cs'nin health'i ile senkronize et
+        if (animationController != null)
         {
-            animator.SetTrigger("Hit");
-            Debug.Log($"[Enemy] {name}: Hit trigger set!");
+            // Önce EnemyAnimationController'ın health'ini Enemy.cs'nin health'i ile güncelle
+            animationController.SetHealth(currentHealth);
+            // Sonra hasar animasyonunu tetikle (animasyon kontrolü için)
+            animationController.TakeDamage(damage);
         }
         else
         {
-            Debug.LogWarning($"[Enemy] {name}: Animator is null, cannot set Hit trigger!");
+            Debug.LogWarning($"[Enemy] {name}: EnemyAnimationController is null, cannot set damage animation!");
         }
 
-        // Can 2'ye düştü mü kontrol et
+        // Can 2'ye düştü mü kontrol et (koşma için)
         if (currentHealth <= 2 && currentHealth > 0)
         {
             isRunning = true;
@@ -931,10 +1007,7 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    public bool IsDead()
-    {
-        return isDead;
-    }
+    public bool IsDead => isDead; // Property (PlayerHealth ile tutarlılık için)
 
     public int GetCurrentHealth()
     {
@@ -957,11 +1030,8 @@ public class Enemy : MonoBehaviour
         isWalking = false;
         isRunning = false;
 
-        // Death animasyonu trigger'la
-        if (animator != null)
-        {
-            animator.SetTrigger("Death");
-        }
+        // Death animasyonu EnemyAnimationController üzerinden zaten ayarlandı (TakeDamage'da Death = 1 yapıldı)
+        // Burada ekstra bir şey yapmaya gerek yok
 
         // Hareketi durdur
         if (controller != null)

@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &7711283397754152214
+--- !u!1001 &5245830843962523404
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -10,35 +10,35 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalScale.y
-      value: 1
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalScale.z
-      value: 1.1459539
+      value: 1.5
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 43.309
+      value: -0.588459
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -2.377
+      value: -0.047
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 17.204
+      value: -1.628
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7071067
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.7071069
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_LocalRotation.y
@@ -66,10 +66,68 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
       propertyPath: m_Name
-      value: "\xE7ivi"
+      value: "\xE7ivi 1"
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8848832906667368345}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3093729899729697412}
   m_SourcePrefab: {fileID: 100100000, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
+--- !u!1 &4903723496575681117 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
+  m_PrefabInstance: {fileID: 5245830843962523404}
+  m_PrefabAsset: {fileID: 0}
+--- !u!64 &8848832906667368345
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4903723496575681117}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 1
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 8691780276856062721, guid: efd73461866462b44a30d11c3dc64bee, type: 3}
+--- !u!114 &3093729899729697412
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4903723496575681117}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8d147b8220c46746a21a77d044878f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Loot
+  itemId: scrap_value15
+  itemDisplayName: Scrap Value 15
+  scrapValue: 15
+  rarity: 0
+  useHighlight: 1
+  highlightColor: {r: 1, g: 0.88, b: 0, a: 1}
+  highlightIntensity: 2.5
+  adjustOutline: 1
+  outlineWidth: 4

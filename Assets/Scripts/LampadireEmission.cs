@@ -39,7 +39,7 @@ public class LampadireEmission : MonoBehaviour
     private void Awake()
     {
         // DayNightCycle'i bul
-        dayNightCycle = FindObjectOfType<DayNightCycle>();
+        dayNightCycle = FindFirstObjectByType<DayNightCycle>();
         if (dayNightCycle == null)
         {
             Debug.LogWarning($"[LampadireEmission] {name}: DayNightCycle bulunamadı! Light çalışmayacak.");

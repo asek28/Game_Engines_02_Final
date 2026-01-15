@@ -94,13 +94,51 @@ public class InventoryManager : MonoBehaviour
         ScrapData data = new ScrapData(scrap.ItemId, scrap.Name, scrap.Value);
         collectedScraps.Add(data);
 
-        // Update ItemSlot count if it exists
-        if (!string.IsNullOrWhiteSpace(scrap.ItemId) && itemSlots.TryGetValue(scrap.ItemId, out ItemSlot slot))
+        // Update ItemSlot count if it exists (tam eşleşme veya genel eşleşme)
+        if (!string.IsNullOrWhiteSpace(scrap.ItemId))
         {
-            slot.AddCount(1);
+            // Önce tam eşleşmeyi dene
+            if (itemSlots.TryGetValue(scrap.ItemId, out ItemSlot slot))
+            {
+                slot.AddCount(1);
+            }
+            else
+            {
+                // Eğer tam eşleşme yoksa, value'ya göre genel slot bulmayı dene
+                // Örneğin: scrap_tier1_value1 -> scrap_value1 slot'una ekle
+                string baseItemId = ExtractBaseItemId(scrap.ItemId);
+                if (!string.IsNullOrEmpty(baseItemId) && itemSlots.TryGetValue(baseItemId, out ItemSlot baseSlot))
+                {
+                    baseSlot.AddCount(1);
+                }
+            }
         }
 
         RefreshInventoryUI();
+    }
+    
+    /// <summary>
+    /// ItemId'den base itemId'yi çıkarır (tier bilgisini kaldırır)
+    /// Örnek: scrap_tier1_value5 -> scrap_value5
+    /// </summary>
+    private string ExtractBaseItemId(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId))
+        {
+            return null;
+        }
+        
+        // Tier sistemindeki itemId'leri base format'a çevir
+        if (itemId.Contains("scrap_tier") && itemId.Contains("value"))
+        {
+            int valueIndex = itemId.IndexOf("value");
+            if (valueIndex >= 0)
+            {
+                return "scrap_" + itemId.Substring(valueIndex);
+            }
+        }
+        
+        return null;
     }
 
     public void RefreshInventoryUI()
@@ -111,17 +149,52 @@ public class InventoryManager : MonoBehaviour
             return;
         }
 
+        // Mevcut UI entry'lerini temizle
         for (int i = itemListParent.childCount - 1; i >= 0; i--)
         {
             Destroy(itemListParent.GetChild(i).gameObject);
         }
 
+        // ItemId'ye göre grupla (aynı itemId'ye sahip itemları birleştir)
+        Dictionary<string, ScrapGroup> groupedScraps = new Dictionary<string, ScrapGroup>();
+        
         for (int i = 0; i < collectedScraps.Count; i++)
         {
             ScrapData scrapData = collectedScraps[i];
-            GameObject entry = Instantiate(itemPrefab, itemListParent);
-            SetupItemEntry(entry, scrapData, i);
+            string key = scrapData.itemId;
+            
+            if (groupedScraps.TryGetValue(key, out ScrapGroup group))
+            {
+                group.count++;
+                group.indices.Add(i);
+            }
+            else
+            {
+                groupedScraps[key] = new ScrapGroup
+                {
+                    data = scrapData,
+                    count = 1,
+                    indices = new List<int> { i }
+                };
+            }
         }
+
+        // Gruplanmış itemları UI'da göster
+        int displayIndex = 0;
+        foreach (KeyValuePair<string, ScrapGroup> kvp in groupedScraps)
+        {
+            ScrapGroup group = kvp.Value;
+            GameObject entry = Instantiate(itemPrefab, itemListParent);
+            SetupItemEntry(entry, group.data, group.count, group.indices[0], displayIndex);
+            displayIndex++;
+        }
+    }
+    
+    private class ScrapGroup
+    {
+        public ScrapData data;
+        public int count;
+        public List<int> indices;
     }
 
     public void UpdateMoneyUI()
@@ -145,6 +218,35 @@ public class InventoryManager : MonoBehaviour
         ScrapData data = collectedScraps[index];
         money += data.value;
         collectedScraps.RemoveAt(index);
+        UpdateMoneyUI();
+        RefreshInventoryUI();
+    }
+    
+    /// <summary>
+    /// Belirli bir itemId'ye sahip tüm scrapleri sat
+    /// </summary>
+    public void SellScrapByItemId(string itemId, int count = 1)
+    {
+        if (string.IsNullOrWhiteSpace(itemId))
+        {
+            return;
+        }
+        
+        int soldCount = 0;
+        int totalEarnings = 0;
+        
+        // Ters sırada döngü (RemoveAt için)
+        for (int i = collectedScraps.Count - 1; i >= 0 && soldCount < count; i--)
+        {
+            if (collectedScraps[i].itemId == itemId)
+            {
+                totalEarnings += collectedScraps[i].value;
+                collectedScraps.RemoveAt(i);
+                soldCount++;
+            }
+        }
+        
+        money += totalEarnings;
         UpdateMoneyUI();
         RefreshInventoryUI();
     }
@@ -186,6 +288,7 @@ public class InventoryManager : MonoBehaviour
 
     /// <summary>
     /// ItemId'ye göre scrap fiyatını döndürür
+    /// Yeni tier sistemi ve eski sistem desteklenir
     /// </summary>
     private int GetScrapPrice(string itemId)
     {
@@ -194,7 +297,38 @@ public class InventoryManager : MonoBehaviour
             return 0;
         }
 
-        // ItemId'ye göre fiyat belirle
+        // Yeni tier sistemi: scrap_tier1_value1, scrap_tier2_value5, scrap_tier3_value10
+        if (itemId.Contains("scrap_tier"))
+        {
+            // Value'yu itemId'den çıkar (value1, value5, value10 gibi)
+            if (itemId.Contains("value"))
+            {
+                int valueIndex = itemId.IndexOf("value");
+                if (valueIndex >= 0 && valueIndex + 5 < itemId.Length)
+                {
+                    string valueStr = itemId.Substring(valueIndex + 5);
+                    // Sayısal kısmı al
+                    string numberStr = "";
+                    for (int i = 0; i < valueStr.Length; i++)
+                    {
+                        if (char.IsDigit(valueStr[i]))
+                        {
+                            numberStr += valueStr[i];
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    if (int.TryParse(numberStr, out int value))
+                    {
+                        return value;
+                    }
+                }
+            }
+        }
+        
+        // Eski sistem: scrap_value5, scrap_value10
         if (itemId.Contains("scrap_value5") || itemId == "scrap_value5")
         {
             return 5;
@@ -202,6 +336,32 @@ public class InventoryManager : MonoBehaviour
         else if (itemId.Contains("scrap_value10") || itemId == "scrap_value10")
         {
             return 10;
+        }
+        
+        // ItemId'den sayısal değer çıkarmayı dene (value1, value5, value10 gibi)
+        if (itemId.Contains("value"))
+        {
+            int valueIndex = itemId.IndexOf("value");
+            if (valueIndex >= 0 && valueIndex + 5 < itemId.Length)
+            {
+                string valueStr = itemId.Substring(valueIndex + 5);
+                string numberStr = "";
+                for (int i = 0; i < valueStr.Length; i++)
+                {
+                    if (char.IsDigit(valueStr[i]))
+                    {
+                        numberStr += valueStr[i];
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                if (int.TryParse(numberStr, out int value))
+                {
+                    return value;
+                }
+            }
         }
 
         // Varsayılan olarak 0 (bilinmeyen item)
@@ -236,7 +396,7 @@ public class InventoryManager : MonoBehaviour
         }
     }
 
-    private void SetupItemEntry(GameObject entry, ScrapData data, int index)
+    private void SetupItemEntry(GameObject entry, ScrapData data, int count, int firstIndex, int displayIndex)
     {
         if (entry == null)
         {
@@ -246,14 +406,22 @@ public class InventoryManager : MonoBehaviour
         TextMeshProUGUI label = entry.GetComponentInChildren<TextMeshProUGUI>();
         if (label != null)
         {
-            label.text = $"{data.name} (Value: {data.value})";
+            if (count > 1)
+            {
+                label.text = $"{data.name} x{count} (Value: {data.value} each)";
+            }
+            else
+            {
+                label.text = $"{data.name} (Value: {data.value})";
+            }
         }
 
         Button button = entry.GetComponentInChildren<Button>();
         if (button != null)
         {
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => SellScrap(index));
+            // Tek bir item satmak için ilk index'i kullan
+            button.onClick.AddListener(() => SellScrapByItemId(data.itemId, 1));
         }
     }
 
@@ -335,8 +503,27 @@ public class InventoryManager : MonoBehaviour
 
         if (showCursorWhenOpen)
         {
-            Cursor.visible = inventoryOpen;
-            Cursor.lockState = inventoryOpen ? CursorLockMode.None : CursorLockMode.Locked;
+            if (inventoryOpen)
+            {
+                // Inventory açılınca cursor'ı göster
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+            }
+            else
+            {
+                // Inventory kapanınca cursor'ı kilitle (RightMouseOrbit üzerinden)
+                RightMouseOrbit cameraOrbit = FindFirstObjectByType<RightMouseOrbit>();
+                if (cameraOrbit != null)
+                {
+                    cameraOrbit.LockCursorPublic();
+                }
+                else
+                {
+                    // Fallback: Manuel kilitle
+                    Cursor.visible = false;
+                    Cursor.lockState = CursorLockMode.Locked;
+                }
+            }
         }
 
         if (disableWhileOpen != null)
@@ -414,7 +601,7 @@ public class InventoryManager : MonoBehaviour
 
         if (cachedCameraOrbit == null)
         {
-            cachedCameraOrbit = FindObjectOfType<RightMouseOrbit>();
+            cachedCameraOrbit = FindFirstObjectByType<RightMouseOrbit>();
         }
     }
 

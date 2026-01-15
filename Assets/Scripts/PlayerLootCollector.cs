@@ -118,7 +118,7 @@ public class PlayerLootCollector : MonoBehaviour
     private void SetupUI()
     {
         // Canvas'ı bul veya oluştur
-        uiCanvas = FindObjectOfType<Canvas>();
+        uiCanvas = FindFirstObjectByType<Canvas>();
         if (uiCanvas == null)
         {
             // Canvas yoksa oluştur
@@ -257,7 +257,7 @@ public class PlayerLootCollector : MonoBehaviour
         nearbyLoots.Clear();
         
         // Tüm loot'ları bul
-        Loot[] allLoots = FindObjectsOfType<Loot>();
+        Loot[] allLoots = FindObjectsByType<Loot>(FindObjectsSortMode.None);
         
         foreach (Loot loot in allLoots)
         {

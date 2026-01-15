@@ -25,7 +25,7 @@ public class testHit : MonoBehaviour
         playerCamera = Camera.main;
         if (playerCamera == null)
         {
-            playerCamera = FindObjectOfType<Camera>();
+            playerCamera = FindFirstObjectByType<Camera>();
         }
 
         if (playerCamera == null)

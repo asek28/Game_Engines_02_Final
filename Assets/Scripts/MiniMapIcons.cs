@@ -66,7 +66,7 @@ public class MiniMapIcons : MonoBehaviour
             miniMapCamera = GetComponentInChildren<Camera>();
             if (miniMapCamera == null)
             {
-                miniMapCamera = FindObjectOfType<Camera>();
+                miniMapCamera = FindFirstObjectByType<Camera>();
             }
         }
         
@@ -115,7 +115,7 @@ public class MiniMapIcons : MonoBehaviour
         }
         else
         {
-            CharacterController controller = FindObjectOfType<CharacterController>();
+            CharacterController controller = FindFirstObjectByType<CharacterController>();
             if (controller != null)
             {
                 playerTarget = controller.transform;
@@ -181,11 +181,11 @@ public class MiniMapIcons : MonoBehaviour
         }
         
         // Tüm enemy'leri bul
-        Enemy[] enemies = FindObjectsOfType<Enemy>();
+        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
         
         foreach (Enemy enemy in enemies)
         {
-            if (enemy == null || enemy.IsDead())
+            if (enemy == null || enemy.IsDead)
             {
                 continue;
             }
@@ -301,7 +301,7 @@ public class MiniMapIcons : MonoBehaviour
             }
             
             // Ölü enemy'lerin iconunu kaldır
-            if (enemy.IsDead())
+            if (enemy.IsDead)
             {
                 if (enemyIcons.ContainsKey(enemy))
                 {
@@ -323,7 +323,7 @@ public class MiniMapIcons : MonoBehaviour
         List<Enemy> enemiesToRemove = new List<Enemy>();
         foreach (Enemy enemy in enemyIcons.Keys)
         {
-            if (enemy == null || enemy.IsDead())
+            if (enemy == null || enemy.IsDead)
             {
                 enemiesToRemove.Add(enemy);
             }
@@ -348,7 +348,7 @@ public class MiniMapIcons : MonoBehaviour
             Enemy enemy = kvp.Key;
             RectTransform iconRect = kvp.Value;
             
-            if (enemy == null || iconRect == null || enemy.IsDead())
+            if (enemy == null || iconRect == null || enemy.IsDead)
             {
                 continue;
             }
