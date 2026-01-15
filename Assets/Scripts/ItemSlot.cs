@@ -17,14 +17,29 @@ public class ItemSlot : MonoBehaviour
     {
         if (countText == null)
         {
+            // Önce "Count" isimli child ara
             Transform countTransform = transform.Find("Count");
             if (countTransform != null)
             {
                 countText = countTransform.GetComponent<TextMeshProUGUI>();
+                Debug.Log($"[ItemSlot] Found Count text by name for {gameObject.name}");
             }
-            else
+            
+            // Bulunamadıysa tüm TMP componentlerini ara
+            if (countText == null)
             {
-                countText = GetComponentInChildren<TextMeshProUGUI>();
+                TextMeshProUGUI[] tmpComponents = GetComponentsInChildren<TextMeshProUGUI>(true);
+                if (tmpComponents != null && tmpComponents.Length > 0)
+                {
+                    countText = tmpComponents[0];
+                    Debug.Log($"[ItemSlot] Found TMP component for {gameObject.name}: {countText.name}");
+                }
+            }
+            
+            // Hala bulunamadıysa uyar
+            if (countText == null)
+            {
+                Debug.LogWarning($"[ItemSlot] ⚠️ Count text NOT found for {gameObject.name}! Item: {itemId}");
             }
         }
 
@@ -57,7 +72,21 @@ public class ItemSlot : MonoBehaviour
     {
         if (countText != null)
         {
-            countText.text = $"x{currentCount}";
+            // Eğer count 0 ise boş göster, değilse "x" ile göster
+            if (currentCount > 0)
+            {
+                countText.text = $"x{currentCount}";
+            }
+            else
+            {
+                countText.text = ""; // 0 ise boş
+            }
+            
+            Debug.Log($"[ItemSlot] {gameObject.name} count updated: x{currentCount}");
+        }
+        else
+        {
+            Debug.LogWarning($"[ItemSlot] ⚠️ Cannot update count for {gameObject.name} - countText is NULL!");
         }
     }
 }

@@ -47,11 +47,68 @@ public class SimpleCrosshairGenerator : MonoBehaviour
     }
     
     private GameObject crosshairContainer;
+    private Canvas crosshairCanvas;
     private CrosshairController crosshairController;
+    private bool isVisible = true;
     
     private void Awake()
     {
         crosshairController = GetComponent<CrosshairController>();
+        
+        // Parent'tan ayır (Player child'ı ise Player yok olduğunda bu kalır)
+        if (transform.parent != null)
+        {
+            Debug.Log($"[SimpleCrosshairGenerator] Detaching from parent: {transform.parent.name}");
+            transform.SetParent(null);
+        }
+        
+        // SimpleCrosshairGenerator'ı sahne değişimlerinde korumak için DontDestroyOnLoad
+        // Ama sadece tek instance olsun (duplicate önle)
+        SimpleCrosshairGenerator[] generators = FindObjectsByType<SimpleCrosshairGenerator>(FindObjectsSortMode.None);
+        if (generators.Length == 1)
+        {
+            DontDestroyOnLoad(gameObject);
+            Debug.Log("[SimpleCrosshairGenerator] Set as DontDestroyOnLoad.");
+        }
+        else if (generators.Length > 1)
+        {
+            // Duplicate var, en eskisini tut yenisini sil
+            bool isOldest = true;
+            foreach (SimpleCrosshairGenerator gen in generators)
+            {
+                if (gen != this && gen.gameObject.scene.buildIndex == -1) // DontDestroyOnLoad'da mı?
+                {
+                    isOldest = false;
+                    break;
+                }
+            }
+            
+            if (!isOldest)
+            {
+                Debug.LogWarning("[SimpleCrosshairGenerator] Duplicate found! Destroying this instance.");
+                Destroy(gameObject);
+                return;
+            }
+            else
+            {
+                DontDestroyOnLoad(gameObject);
+                Debug.Log("[SimpleCrosshairGenerator] Kept as the oldest instance.");
+            }
+        }
+    }
+    
+    private void OnEnable()
+    {
+        // Sahne değişiminde veya GameObject enable olduğunda
+        // crosshairContainer yok olduysa yeniden oluştur
+        if (crosshairContainer == null || crosshairCanvas == null)
+        {
+            Debug.Log("[SimpleCrosshairGenerator] Crosshair missing, regenerating...");
+            crosshairCanvas = null; // Canvas referansını sıfırla
+            LoadSettings();
+            GenerateCrosshair();
+            SetVisibility(true);
+        }
     }
     
     private void Start()
@@ -61,25 +118,50 @@ public class SimpleCrosshairGenerator : MonoBehaviour
         
         // Crosshair'i oluştur
         GenerateCrosshair();
+        
+        // Başlangıç görünürlüğünü ayarla
+        SetVisibility(true);
+        
+        Debug.Log("[SimpleCrosshairGenerator] Crosshair initialized.");
     }
     
     private void Update()
     {
-        // Crosshair controller varsa görünürlük kontrolünü ona bırak
-        if (crosshairController != null && crosshairContainer != null)
+        // Crosshair container yok olmuş mu kontrol et (sahne değişimi sonrası)
+        if (crosshairContainer == null || crosshairCanvas == null)
         {
-            // CrosshairController crosshair'in görünürlüğünü yönetir
-            // Biz sadece container'ı aktif/pasif yaparız
-            bool shouldBeVisible = !IsUIOpen();
-            crosshairContainer.SetActive(shouldBeVisible);
+            // Crosshair'i yeniden oluştur
+            Debug.LogWarning("[SimpleCrosshairGenerator] Crosshair container lost! Recreating...");
+            crosshairCanvas = null;
+            GenerateCrosshair();
+            SetVisibility(true);
+            return;
+        }
+        
+        // UI durumuna göre görünürlüğü kontrol et
+        bool shouldBeVisible = !IsUIOpen();
+        
+        // Durum değiştiyse güncelle
+        if (isVisible != shouldBeVisible)
+        {
+            SetVisibility(shouldBeVisible);
+            Debug.Log($"[SimpleCrosshairGenerator] Visibility changed: {shouldBeVisible} (UI Open: {IsUIOpen()})");
         }
     }
     
     /// <summary>
-    /// UI menülerinin açık olup olmadığını kontrol eder
+    /// UI menülerinin açık olup olmadığını veya MainMenu sahnesinde olup olmadığını kontrol eder
     /// </summary>
     private bool IsUIOpen()
     {
+        // MainMenu sahnesinde mi kontrol et
+        string currentSceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+        if (currentSceneName.Contains("MainMenu") || currentSceneName.Contains("Menu"))
+        {
+            // MainMenu'deyiz, crosshair'i gizle
+            return true;
+        }
+        
         // Settings menüsü açık mı?
         SettingsMenuController settingsMenu = FindFirstObjectByType<SettingsMenuController>();
         if (settingsMenu != null && settingsMenu.IsSettingsOpen())
@@ -108,16 +190,71 @@ public class SimpleCrosshairGenerator : MonoBehaviour
         }
         
         // Canvas bul veya oluştur
-        Canvas canvas = FindFirstObjectByType<Canvas>();
-        if (canvas == null)
+        if (crosshairCanvas == null)
         {
-            Debug.LogError("[SimpleCrosshairGenerator] No Canvas found in scene!");
+            // Tüm Canvas'ları bul
+            Canvas[] allCanvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            
+            // ÖNCE CrosshairCanvas isimli canvas'ı ara (varsa)
+            foreach (Canvas canvas in allCanvases)
+            {
+                if (canvas.name.Contains("CrosshairCanvas") || canvas.name.Contains("PlayerUI"))
+                {
+                    crosshairCanvas = canvas;
+                    Debug.Log($"[SimpleCrosshairGenerator] ✅ Found preferred Canvas: {canvas.name}");
+                    break;
+                }
+            }
+            
+            // Bulunamadıysa ScreenSpaceOverlay Canvas'ı tercih et AMA SettingsCanvas değil!
+            if (crosshairCanvas == null)
+            {
+                foreach (Canvas canvas in allCanvases)
+                {
+                    // SettingsCanvas, InventoryCanvas gibi UI Canvas'larını ATLA
+                    if (canvas.name.Contains("Settings") || canvas.name.Contains("Inventory") || 
+                        canvas.name.Contains("Menu") || canvas.name.Contains("Death"))
+                    {
+                        continue; // Bu Canvas'ları atla
+                    }
+                    
+                    if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                    {
+                        crosshairCanvas = canvas;
+                        Debug.Log($"[SimpleCrosshairGenerator] Using ScreenSpaceOverlay Canvas: {canvas.name}");
+                        break;
+                    }
+                }
+            }
+            
+            // Hala bulunamadıysa YENİ BİR CROSSHAIR CANVAS OLUŞTUR
+            if (crosshairCanvas == null)
+            {
+                Debug.LogWarning("[SimpleCrosshairGenerator] No suitable Canvas found! Creating CrosshairCanvas...");
+                GameObject canvasObj = new GameObject("CrosshairCanvas");
+                crosshairCanvas = canvasObj.AddComponent<Canvas>();
+                crosshairCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                crosshairCanvas.sortingOrder = 9999; // En üstte
+                
+                CanvasScaler scaler = canvasObj.AddComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1920, 1080);
+                
+                canvasObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+                
+                Debug.Log("[SimpleCrosshairGenerator] ✅ Created new CrosshairCanvas!");
+            }
+        }
+        
+        if (crosshairCanvas == null)
+        {
+            Debug.LogError("[SimpleCrosshairGenerator] ❌ No Canvas found in scene!");
             return;
         }
         
         // Container oluştur
         crosshairContainer = new GameObject("GeneratedCrosshair");
-        crosshairContainer.transform.SetParent(canvas.transform, false);
+        crosshairContainer.transform.SetParent(crosshairCanvas.transform, false);
         
         RectTransform containerRect = crosshairContainer.AddComponent<RectTransform>();
         containerRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -144,7 +281,12 @@ public class SimpleCrosshairGenerator : MonoBehaviour
                 break;
         }
         
-        Debug.Log($"[SimpleCrosshairGenerator] Generated {crosshairType} crosshair.");
+        Debug.Log($"[SimpleCrosshairGenerator] ✅ Crosshair generated! Type: {crosshairType}, Canvas: {crosshairCanvas.name}");
+        
+        // Crosshair yeniden oluşturulduktan sonra mevcut duruma göre visibility'yi ayarla
+        bool shouldBeVisible = !IsUIOpen();
+        SetVisibility(shouldBeVisible);
+        Debug.Log($"[SimpleCrosshairGenerator] Post-generation visibility set to: {shouldBeVisible}");
     }
     
     /// <summary>
@@ -326,8 +468,6 @@ public class SimpleCrosshairGenerator : MonoBehaviour
         PlayerPrefs.SetFloat(centerGapKey, centerGap);
         PlayerPrefs.SetFloat(dotSizeKey, dotSize);
         PlayerPrefs.Save();
-        
-        Debug.Log("[SimpleCrosshairGenerator] Settings saved.");
     }
     
     /// <summary>
@@ -346,8 +486,6 @@ public class SimpleCrosshairGenerator : MonoBehaviour
         lineLength = PlayerPrefs.GetFloat(lineLengthKey, lineLength);
         centerGap = PlayerPrefs.GetFloat(centerGapKey, centerGap);
         dotSize = PlayerPrefs.GetFloat(dotSizeKey, dotSize);
-        
-        Debug.Log("[SimpleCrosshairGenerator] Settings loaded.");
     }
     
     /// <summary>
@@ -364,8 +502,6 @@ public class SimpleCrosshairGenerator : MonoBehaviour
         
         GenerateCrosshair();
         SaveSettings();
-        
-        Debug.Log("[SimpleCrosshairGenerator] Reset to defaults.");
     }
     
     // Getter fonksiyonları (UI'ın mevcut değerleri alması için)
@@ -375,4 +511,36 @@ public class SimpleCrosshairGenerator : MonoBehaviour
     public float GetLineLength() => lineLength;
     public float GetCenterGap() => centerGap;
     public float GetDotSize() => dotSize;
+    
+    /// <summary>
+    /// Crosshair'in görünürlüğünü değiştirir (SetActive yerine enabled kullanır - daha güvenli)
+    /// </summary>
+    public void SetVisibility(bool visible)
+    {
+        isVisible = visible;
+        
+        if (crosshairContainer != null)
+        {
+            // SetActive yerine Canvas Group veya Image.enabled kullan
+            CanvasGroup canvasGroup = crosshairContainer.GetComponent<CanvasGroup>();
+            
+            if (canvasGroup == null)
+            {
+                // Canvas Group yoksa ekle
+                canvasGroup = crosshairContainer.AddComponent<CanvasGroup>();
+                Debug.Log("[SimpleCrosshairGenerator] Added CanvasGroup to crosshair container.");
+            }
+            
+            // CanvasGroup ile görünürlüğü kontrol et (daha güvenli)
+            canvasGroup.alpha = visible ? 1f : 0f;
+            canvasGroup.interactable = visible;
+            canvasGroup.blocksRaycasts = visible;
+            
+            Debug.Log($"[SimpleCrosshairGenerator] SetVisibility({visible}) - Alpha: {canvasGroup.alpha}");
+        }
+        else
+        {
+            Debug.LogWarning("[SimpleCrosshairGenerator] ⚠️ Cannot set visibility - crosshairContainer is NULL!");
+        }
+    }
 }

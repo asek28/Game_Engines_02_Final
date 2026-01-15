@@ -47,6 +47,9 @@ public class PlayerHealth : MonoBehaviour
     [Tooltip("Öldüğünde tetiklenir")]
     public UnityEvent OnDeath;
     
+    // Static event for Death Screen UI
+    public static event System.Action OnPlayerDied;
+    
     // Private variables
     private int currentHealth;
     private bool isDead = false;
@@ -61,12 +64,22 @@ public class PlayerHealth : MonoBehaviour
     
     private void Awake()
     {
+        // UnityEvent'leri initialize et
+        if (OnHealthChanged == null)
+            OnHealthChanged = new UnityEvent<int, int>();
+        if (OnDamageTaken == null)
+            OnDamageTaken = new UnityEvent<int>();
+        if (OnDeath == null)
+            OnDeath = new UnityEvent();
+
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
         {
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
         }
+
+        Debug.Log("[PlayerHealth] Initialized UnityEvents");
     }
     
     private void Start()
@@ -171,6 +184,7 @@ public class PlayerHealth : MonoBehaviour
         
         // Event tetikle
         OnDeath?.Invoke();
+        OnPlayerDied?.Invoke(); // Static event (DeathScreenUI için)
         
         // Burada ölüm animasyonu, game over ekranı, vb. eklenebilir
     }

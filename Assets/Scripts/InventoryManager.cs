@@ -207,6 +207,14 @@ public class InventoryManager : MonoBehaviour
         moneyText.text = "$" + money.ToString();
     }
 
+    /// <summary>
+    /// Mevcut para miktarını döndürür (DeathScreenUI için)
+    /// </summary>
+    public int GetCurrentMoney()
+    {
+        return money;
+    }
+
     public void SellScrap(int index)
     {
         if (index < 0 || index >= collectedScraps.Count)
