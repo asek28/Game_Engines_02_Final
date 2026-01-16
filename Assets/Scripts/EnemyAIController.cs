@@ -77,6 +77,9 @@ public class EnemyAIController : MonoBehaviour
     
     [Tooltip("Saldırı cooldown (saniye)")]
     [SerializeField, Min(0.5f)] private float attackCooldown = 1.5f;
+    
+    [Tooltip("Saldırı hasarı")]
+    [SerializeField, Min(1)] private int attackDamage = 6;
 
     [Header("Flee Settings (Passive Enemy)")]
     [Tooltip("Player'dan kaçma mesafesi")]
@@ -848,8 +851,8 @@ public class EnemyAIController : MonoBehaviour
         PlayerHealth playerHealth = playerTransform.GetComponent<PlayerHealth>();
         if (playerHealth != null && !playerHealth.IsDead)
         {
-            playerHealth.TakeDamage(1); // Hasar miktarını ayarlayabilirsiniz
-            DebugLog($"[EnemyAIController] {name}: Attacking player!");
+            playerHealth.TakeDamage(attackDamage);
+            DebugLog($"[EnemyAIController] {name}: Attacking player! Damage: {attackDamage}");
         }
     }
 

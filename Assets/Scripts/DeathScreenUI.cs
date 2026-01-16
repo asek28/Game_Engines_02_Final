@@ -46,6 +46,14 @@ public class DeathScreenUI : MonoBehaviour
     [SerializeField] private PlayerHealth playerHealth;
 
     private bool isDeathScreenActive = false;
+    
+    /// <summary>
+    /// Death screen aktif mi kontrol et (public getter)
+    /// </summary>
+    public bool IsDeathScreenActive()
+    {
+        return isDeathScreenActive;
+    }
 
     private void Awake()
     {
@@ -110,6 +118,9 @@ public class DeathScreenUI : MonoBehaviour
 
         // Player movement'ı devre dışı bırak (Time.timeScale = 0 yeterli olmayabilir)
         DisablePlayerMovement();
+        
+        // Kamera hareketini durdur
+        DisableCameraMovement();
 
         // Panel'i aktif et
         deathScreenPanel.SetActive(true);
@@ -189,6 +200,19 @@ public class DeathScreenUI : MonoBehaviour
         {
             navAgent.enabled = false;
             Debug.Log("[DeathScreenUI] ✓ NavMeshAgent disabled.");
+        }
+    }
+    
+    /// <summary>
+    /// Kamera hareketini devre dışı bırak
+    /// </summary>
+    private void DisableCameraMovement()
+    {
+        RightMouseOrbit cameraOrbit = FindFirstObjectByType<RightMouseOrbit>();
+        if (cameraOrbit != null)
+        {
+            cameraOrbit.enabled = false;
+            Debug.Log("[DeathScreenUI] ✓ RightMouseOrbit disabled.");
         }
     }
 

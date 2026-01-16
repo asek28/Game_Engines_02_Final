@@ -37,6 +37,12 @@ public class PlayerHealth : MonoBehaviour
     [Tooltip("Hasar aldıktan kaç saniye sonra yenilenme başlar")]
     [SerializeField] private float regenDelay = 5f;
     
+    [Tooltip("Hunger ve Thirst full olduğunda regen aktif olsun mu?")]
+    [SerializeField] private bool enableHungerThirstRegen = true;
+    
+    [Tooltip("Hunger ve Thirst full olduğunda regen süresi (saniye)")]
+    [SerializeField] private float hungerThirstRegenDuration = 3f;
+    
     [Header("Events")]
     [Tooltip("Can değiştiğinde tetiklenir (currentHealth, maxHealth)")]
     public UnityEvent<int, int> OnHealthChanged;
@@ -55,6 +61,9 @@ public class PlayerHealth : MonoBehaviour
     private bool isDead = false;
     private AudioSource audioSource;
     private float lastDamageTime;
+    private HungerThirstManager hungerThirstManager;
+    private float hungerThirstRegenStartTime = -1f;
+    private bool isHungerThirstRegenActive = false;
     
     // Public getters
     public int CurrentHealth => currentHealth;
@@ -90,13 +99,61 @@ public class PlayerHealth : MonoBehaviour
         // Event tetikle (healthbar güncellenir)
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
         
+        // HungerThirstManager'ı bul
+        hungerThirstManager = FindFirstObjectByType<HungerThirstManager>();
+        if (hungerThirstManager == null)
+        {
+            hungerThirstManager = GetComponent<HungerThirstManager>();
+        }
+        
         Debug.Log($"[PlayerHealth] Initialized: {currentHealth}/{maxHealth} HP");
     }
     
     private void Update()
     {
-        // Can yenilenme
-        if (enableRegeneration && !isDead && currentHealth < maxHealth)
+        // Hunger ve Thirst full olduğunda regen kontrolü
+        if (enableHungerThirstRegen && hungerThirstManager != null && !isDead && currentHealth < maxHealth)
+        {
+            bool isHungerFull = hungerThirstManager.CurrentHunger >= hungerThirstManager.MaxHunger;
+            bool isThirstFull = hungerThirstManager.CurrentThirst >= hungerThirstManager.MaxThirst;
+            
+            // Her ikisi de full ise regen başlat
+            if (isHungerFull && isThirstFull)
+            {
+                // Regen başlamadıysa başlat
+                if (!isHungerThirstRegenActive)
+                {
+                    hungerThirstRegenStartTime = Time.time;
+                    isHungerThirstRegenActive = true;
+                    Debug.Log($"[PlayerHealth] 🍖💧 Hunger and Thirst are full! Starting regen for {hungerThirstRegenDuration} seconds.");
+                }
+                
+                // Regen süresi içindeyse can yenile (delay yok, hemen başlar)
+                if (Time.time - hungerThirstRegenStartTime <= hungerThirstRegenDuration)
+                {
+                    Heal((int)(regenPerSecond * Time.deltaTime));
+                }
+                else
+                {
+                    // Süre doldu, regen'i durdur
+                    isHungerThirstRegenActive = false;
+                    Debug.Log($"[PlayerHealth] ⏱️ Hunger/Thirst regen duration ended.");
+                }
+            }
+            else
+            {
+                // Hunger veya Thirst full değilse regen'i durdur
+                if (isHungerThirstRegenActive)
+                {
+                    isHungerThirstRegenActive = false;
+                    hungerThirstRegenStartTime = -1f;
+                    Debug.Log($"[PlayerHealth] ⚠️ Hunger or Thirst is not full anymore. Regen stopped.");
+                }
+            }
+        }
+        
+        // Normal can yenilenme (Hunger/Thirst regen aktif değilse)
+        if (enableRegeneration && !isDead && currentHealth < maxHealth && !isHungerThirstRegenActive)
         {
             if (Time.time - lastDamageTime >= regenDelay)
             {

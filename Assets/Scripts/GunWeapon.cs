@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 using System.Collections;
 
 /// <summary>
@@ -17,6 +18,15 @@ public class GunWeapon : MonoBehaviour, IWeapon
     
     [Tooltip("Menzil (raycast mesafesi)")]
     [SerializeField] private float range = 50f;
+    
+    [Tooltip("Hasar verme yöntemi: Raycast (ekran merkezi) veya OverlapSphere (player önünde alan taraması)")]
+    [SerializeField] private bool useOverlapSphere = true;
+    
+    [Tooltip("OverlapSphere yarıçapı (sadece useOverlapSphere true ise)")]
+    [SerializeField] private float overlapSphereRadius = 2f;
+    
+    [Tooltip("Enemy tag'i (boş bırakılırsa 'Enemy' kullanılır)")]
+    [SerializeField] private string enemyTag = "Enemy";
     
     [Tooltip("Ateş etme cooldown (saniye)")]
     [SerializeField] private float fireRate = 0.25f;
@@ -63,6 +73,12 @@ public class GunWeapon : MonoBehaviour, IWeapon
     
     private void Awake()
     {
+        // enemyTag null ise varsayılan değeri ata
+        if (string.IsNullOrEmpty(enemyTag))
+        {
+            enemyTag = "Enemy";
+        }
+        
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
         {
@@ -172,89 +188,229 @@ public class GunWeapon : MonoBehaviour, IWeapon
             muzzleFlash.ShowFlash();
         }
         
-        // Raycast ile ateş et
-        Vector3 rayOrigin = firePoint != null ? firePoint.position : transform.position;
-        Vector3 rayDirection = firePoint != null ? firePoint.forward : transform.forward;
-        
-        // Ekran merkezinden raycast (crosshair'den ateş etme)
-        if (mainCamera != null)
+        // Player transform'unu bul (OverlapSphere için gerekli)
+        Transform playerTransform = null;
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
         {
-            Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-            rayOrigin = ray.origin;
-            rayDirection = ray.direction;
+            playerTransform = player.transform;
         }
-        
-        RaycastHit hit;
-        // ÖNEMLI: QueryTriggerInteraction.Collide kullanarak trigger collider'ları da algıla
-        bool didHit = Physics.Raycast(rayOrigin, rayDirection, out hit, range, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
-        
-        Vector3 hitPoint = didHit ? hit.point : rayOrigin + rayDirection * range;
-        
-        // Debug: Raycast'i görselleştir
-        if (showRaycastDebug)
+        else
         {
-            Color debugColor = didHit ? Color.green : Color.red;
-            Debug.DrawLine(rayOrigin, hitPoint, debugColor, 2f); // 2 saniye görünür
-        }
-        
-        // Mermi izi göster
-        if (bulletTrail != null)
-        {
-            StartCoroutine(ShowBulletTrail(rayOrigin, hitPoint));
-        }
-        
-        // Hasar ver (eğer enemy'ye isabet ettiyse)
-        if (didHit)
-        {
-            Debug.Log($"[GunWeapon] Hit: {hit.collider.name} (Tag: {hit.collider.tag}, GameObject: {hit.collider.gameObject.name})");
-            
-            // Enemy'ye hasar ver - hem collider'da hem de parent'ta ara
-            EnemyAIController enemy = hit.collider.GetComponent<EnemyAIController>();
-            
-            // Eğer collider'da yoksa parent'a bak (çünkü collider child object olabilir)
-            if (enemy == null)
+            SimplePlayerMovement playerMovement = FindFirstObjectByType<SimplePlayerMovement>();
+            if (playerMovement != null)
             {
-                enemy = hit.collider.GetComponentInParent<EnemyAIController>();
+                playerTransform = playerMovement.transform;
             }
+        }
+        
+        bool hitEnemy = false;
+        Vector3 hitPoint = Vector3.zero;
+        
+        // YÖNTEM 1: OverlapSphere (Player'ın önünde alan taraması - daha güvenilir)
+        if (useOverlapSphere && playerTransform != null)
+        {
+            // Player'ın önünde bir nokta hesapla
+            Vector3 forwardPosition = playerTransform.position + playerTransform.forward * (range * 0.5f);
             
-            if (enemy != null)
+            // OverlapSphere ile enemy'leri bul
+            Collider[] colliders = Physics.OverlapSphere(forwardPosition, overlapSphereRadius, ~0, QueryTriggerInteraction.Collide);
+            
+            Debug.Log($"[GunWeapon] 🔍 OverlapSphere at {forwardPosition}, Radius: {overlapSphereRadius}, Found {colliders.Length} colliders");
+            
+            foreach (Collider col in colliders)
             {
-                Vector3 knockbackDir = rayDirection.normalized;
-                enemy.TakeDamage(damage, hit.point, knockbackDir);
+                if (col == null) continue;
                 
-                // Büyük hasar logu (daha görünür)
-                Debug.Log($"<color=green>✅ [GunWeapon] HIT ENEMY! Dealt {damage} damage to {enemy.name}! Health: {enemy.GetCurrentHealth()}/{enemy.GetMaxHealth()}</color>");
-            }
-            else
-            {
-                // Enemy component'i bulunamadı
-                Debug.Log($"<color=yellow>⚠️ [GunWeapon] Hit {hit.collider.name} but no EnemyAIController found! (Layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)})</color>");
+                GameObject hitObject = col.gameObject;
+                bool isEnemy = false;
+                
+                // 1. Tag kontrolü
+                if (!string.IsNullOrEmpty(enemyTag) && 
+                    (col.CompareTag(enemyTag) || hitObject.CompareTag(enemyTag)))
+                {
+                    isEnemy = true;
+                }
+                
+                // 2. Component kontrolü
+                Enemy enemy = hitObject.GetComponent<Enemy>();
+                EnemyAIController enemyAI = hitObject.GetComponent<EnemyAIController>();
+                
+                if (enemy == null)
+                {
+                    enemy = hitObject.GetComponentInParent<Enemy>();
+                }
+                if (enemyAI == null)
+                {
+                    enemyAI = hitObject.GetComponentInParent<EnemyAIController>();
+                }
+                
+                if (enemy != null || enemyAI != null)
+                {
+                    isEnemy = true;
+                }
+                
+                // Enemy'ye hasar ver
+                if (isEnemy)
+                {
+                    hitPoint = hitObject.transform.position;
+                    Vector3 knockbackDir = playerTransform != null 
+                        ? (hitObject.transform.position - playerTransform.position).normalized 
+                        : Vector3.forward;
+                    
+                    // EnemyAIController'a hasar ver
+                    if (enemyAI != null && !enemyAI.IsDead)
+                    {
+                        enemyAI.TakeDamage(damage, hitPoint, knockbackDir);
+                        NotifyEnemyHit();
+                        hitEnemy = true;
+                        Debug.Log($"<color=green>✅ [GunWeapon] HIT ENEMY AI via OverlapSphere! Dealt {damage} damage to {enemyAI.name}! Health: {enemyAI.GetCurrentHealth()}/{enemyAI.GetMaxHealth()}</color>");
+                    }
+                    // Enemy.cs'ye hasar ver
+                    else if (enemy != null && !enemy.IsDead)
+                    {
+                        enemy.TakeDamage(damage, hitPoint, knockbackDir);
+                        NotifyEnemyHit();
+                        hitEnemy = true;
+                        Debug.Log($"<color=green>✅ [GunWeapon] HIT ENEMY via OverlapSphere! Dealt {damage} damage to {enemy.name}! Health: {enemy.GetCurrentHealth()}/{enemy.GetMaxHealth()}</color>");
+                    }
+                }
             }
             
-            // Impact efekti (her vuruşta - duvar, zemin, enemy hepsi için)
-            if (impactEffect != null)
+            // Visual feedback için raycast yap (mermi izi için)
+            if (mainCamera == null)
             {
-                GameObject impact = Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
-                Destroy(impact, 2f);
+                mainCamera = Camera.main;
             }
-            else
+            
+            if (mainCamera != null)
             {
-                // Varsayılan impact efekti (basit sarı sphere)
-                GameObject defaultImpact = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                defaultImpact.transform.position = hit.point;
-                defaultImpact.transform.localScale = Vector3.one * 0.2f;
-                Renderer impactRenderer = defaultImpact.GetComponent<Renderer>();
-                if (impactRenderer != null)
+                Vector3 screenCenter = new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0f);
+                Ray ray = mainCamera.ScreenPointToRay(screenCenter);
+                Vector3 rayOrigin = ray.origin;
+                Vector3 rayDirection = ray.direction;
+                
+                RaycastHit hit;
+                bool didHit = Physics.Raycast(rayOrigin, rayDirection, out hit, range, ~0, QueryTriggerInteraction.Collide);
+                Vector3 visualHitPoint = didHit ? hit.point : rayOrigin + rayDirection * range;
+                
+                // Mermi izi göster
+                if (bulletTrail != null)
                 {
-                    impactRenderer.material.color = Color.yellow;
-                    impactRenderer.material.EnableKeyword("_EMISSION");
-                    impactRenderer.material.SetColor("_EmissionColor", Color.yellow * 2f);
+                    StartCoroutine(ShowBulletTrail(rayOrigin, visualHitPoint));
                 }
-                Destroy(defaultImpact, 0.1f);
+                
+                // Impact efekti
+                if (didHit && impactEffect != null)
+                {
+                    GameObject impact = Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
+                    Destroy(impact, 2f);
+                }
+            }
+        }
+        // YÖNTEM 2: Raycast (ekran merkezi - eski yöntem)
+        else
+        {
+            if (mainCamera == null)
+            {
+                mainCamera = Camera.main;
+            }
+            
+            if (mainCamera == null)
+            {
+                Debug.LogError("[GunWeapon] Camera.main is null! Cannot fire.");
+                return;
+            }
+            
+            // Ekranın tam ortasından raycast
+            Vector3 screenCenter = new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0f);
+            Ray ray = mainCamera.ScreenPointToRay(screenCenter);
+            Vector3 rayOrigin = ray.origin;
+            Vector3 rayDirection = ray.direction;
+            
+            RaycastHit hit;
+            int layerMask = ~0;
+            bool didHit = Physics.Raycast(rayOrigin, rayDirection, out hit, range, layerMask, QueryTriggerInteraction.Collide);
+            
+            hitPoint = didHit ? hit.point : rayOrigin + rayDirection * range;
+            
+            Debug.Log($"[GunWeapon] 🎯 Raycast from screen center - Hit: {didHit}, Range: {range}");
+            
+            // Mermi izi göster
+            if (bulletTrail != null)
+            {
+                StartCoroutine(ShowBulletTrail(rayOrigin, hitPoint));
+            }
+            
+            // Enemy detection ve hasar verme
+            if (didHit && hit.collider != null)
+            {
+                GameObject hitObject = hit.collider.gameObject;
+                if (hitObject == null) return;
+                
+                bool isEnemy = false;
+                
+                // 1. Tag kontrolü
+                if (!string.IsNullOrEmpty(enemyTag) && hit.collider != null)
+                {
+                    if (hit.collider.CompareTag(enemyTag) || hitObject.CompareTag(enemyTag))
+                    {
+                        isEnemy = true;
+                    }
+                }
+                
+                // 2. Component kontrolü
+                Enemy enemy = hitObject.GetComponent<Enemy>();
+                EnemyAIController enemyAI = hitObject.GetComponent<EnemyAIController>();
+                
+                if (enemy == null)
+                {
+                    enemy = hitObject.GetComponentInParent<Enemy>();
+                }
+                if (enemyAI == null)
+                {
+                    enemyAI = hitObject.GetComponentInParent<EnemyAIController>();
+                }
+                
+                if (enemy != null || enemyAI != null)
+                {
+                    isEnemy = true;
+                }
+                
+                // Enemy'ye hasar ver
+                if (isEnemy)
+                {
+                    Vector3 knockbackDir = rayDirection.normalized;
+                    
+                    if (enemyAI != null && !enemyAI.IsDead)
+                    {
+                        enemyAI.TakeDamage(damage, hit.point, knockbackDir);
+                        NotifyEnemyHit();
+                        hitEnemy = true;
+                        Debug.Log($"<color=green>✅ [GunWeapon] HIT ENEMY AI! Dealt {damage} damage to {enemyAI.name}! Health: {enemyAI.GetCurrentHealth()}/{enemyAI.GetMaxHealth()}</color>");
+                    }
+                    else if (enemy != null && !enemy.IsDead)
+                    {
+                        enemy.TakeDamage(damage, hit.point, knockbackDir);
+                        NotifyEnemyHit();
+                        hitEnemy = true;
+                        Debug.Log($"<color=green>✅ [GunWeapon] HIT ENEMY! Dealt {damage} damage to {enemy.name}! Health: {enemy.GetCurrentHealth()}/{enemy.GetMaxHealth()}</color>");
+                    }
+                }
+            }
+            
+            // Impact efekti
+            if (didHit)
+            {
+                if (impactEffect != null)
+                {
+                    GameObject impact = Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
+                    Destroy(impact, 2f);
+                }
             }
         }
         
-        Debug.Log($"[GunWeapon] Fired! Hit: {didHit}");
+        Debug.Log($"[GunWeapon] Fired! Hit Enemy: {hitEnemy}");
     }
     
     /// <summary>
@@ -306,4 +462,17 @@ public class GunWeapon : MonoBehaviour, IWeapon
         
         return false;
     }
+    
+    /// <summary>
+    /// Enemy'ye hasar verildiğinde HungerThirstManager'a bildir
+    /// </summary>
+    private void NotifyEnemyHit()
+    {
+        HungerThirstManager hungerThirstManager = FindFirstObjectByType<HungerThirstManager>();
+        if (hungerThirstManager != null)
+        {
+            hungerThirstManager.OnEnemyHit();
+        }
+    }
+    
 }

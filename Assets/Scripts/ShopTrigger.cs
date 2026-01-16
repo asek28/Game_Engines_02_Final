@@ -12,6 +12,14 @@ public class ShopTrigger : MonoBehaviour
     [Tooltip("Açılacak Shop Canvas")]
     [SerializeField] private GameObject shopCanvas;
     
+    /// <summary>
+    /// Shop Canvas'ı döndür (public getter)
+    /// </summary>
+    public GameObject GetShopCanvas()
+    {
+        return shopCanvas;
+    }
+    
     [Header("Prompt UI")]
     [Tooltip("'Press E to Shop' yazısı (Canvas > Text)")]
     [SerializeField] private GameObject promptUI;
@@ -185,6 +193,12 @@ public class ShopTrigger : MonoBehaviour
             Time.timeScale = 0f;
         }
         
+        // Player movement'ı devre dışı bırak
+        DisablePlayerMovement();
+        
+        // Kamera hareketini durdur
+        DisableCameraMovement();
+        
         // Cursor göster
         if (showCursor)
         {
@@ -219,6 +233,12 @@ public class ShopTrigger : MonoBehaviour
         {
             Time.timeScale = 1f;
         }
+        
+        // Player movement'ı tekrar aktif et
+        EnablePlayerMovement();
+        
+        // Kamera hareketini tekrar aktif et
+        EnableCameraMovement();
         
         // Cursor gizle
         if (showCursor)
@@ -264,6 +284,90 @@ public class ShopTrigger : MonoBehaviour
             {
                 Gizmos.DrawSphere(sphere.center, sphere.radius);
             }
+        }
+    }
+    
+    /// <summary>
+    /// Player movement sistemlerini devre dışı bırak
+    /// </summary>
+    private void DisablePlayerMovement()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null) return;
+        
+        // SimplePlayerMovement'ı devre dışı bırak
+        SimplePlayerMovement simpleMovement = player.GetComponent<SimplePlayerMovement>();
+        if (simpleMovement != null)
+        {
+            simpleMovement.enabled = false;
+        }
+        
+        // ShopPlayerMovement'ı devre dışı bırak
+        ShopPlayerMovement shopMovement = player.GetComponent<ShopPlayerMovement>();
+        if (shopMovement != null)
+        {
+            shopMovement.enabled = false;
+        }
+        
+        // CharacterController'ı devre dışı bırak
+        CharacterController controller = player.GetComponent<CharacterController>();
+        if (controller != null)
+        {
+            controller.enabled = false;
+        }
+    }
+    
+    /// <summary>
+    /// Player movement sistemlerini tekrar aktif et
+    /// </summary>
+    private void EnablePlayerMovement()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null) return;
+        
+        // SimplePlayerMovement'ı aktif et
+        SimplePlayerMovement simpleMovement = player.GetComponent<SimplePlayerMovement>();
+        if (simpleMovement != null)
+        {
+            simpleMovement.enabled = true;
+        }
+        
+        // ShopPlayerMovement'ı aktif et
+        ShopPlayerMovement shopMovement = player.GetComponent<ShopPlayerMovement>();
+        if (shopMovement != null)
+        {
+            shopMovement.enabled = true;
+        }
+        
+        // CharacterController'ı aktif et
+        CharacterController controller = player.GetComponent<CharacterController>();
+        if (controller != null)
+        {
+            controller.enabled = true;
+        }
+    }
+    
+    /// <summary>
+    /// Kamera hareketini devre dışı bırak
+    /// </summary>
+    private void DisableCameraMovement()
+    {
+        RightMouseOrbit cameraOrbit = FindFirstObjectByType<RightMouseOrbit>();
+        if (cameraOrbit != null)
+        {
+            cameraOrbit.enabled = false;
+        }
+    }
+    
+    /// <summary>
+    /// Kamera hareketini tekrar aktif et
+    /// </summary>
+    private void EnableCameraMovement()
+    {
+        RightMouseOrbit cameraOrbit = FindFirstObjectByType<RightMouseOrbit>();
+        if (cameraOrbit != null)
+        {
+            cameraOrbit.enabled = true;
         }
     }
 }

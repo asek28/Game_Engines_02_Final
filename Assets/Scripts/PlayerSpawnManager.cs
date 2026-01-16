@@ -13,6 +13,12 @@ public class PlayerSpawnManager : MonoBehaviour
     [Tooltip("Default spawn pozisyonu (Transform yoksa)")]
     [SerializeField] private Vector3 defaultSpawnPosition = new Vector3(0, 1, 0);
     
+    [Tooltip("Shop içi spawn pozisyonu (Shop'a girişte)")]
+    [SerializeField] private Transform shopSpawnPoint;
+    
+    [Tooltip("Shop içi spawn pozisyonu (Transform yoksa)")]
+    [SerializeField] private Vector3 shopSpawnPosition = new Vector3(2, 1, 10);
+    
     [Header("Debug")]
     [Tooltip("Debug log'ları göster")]
     [SerializeField] private bool showDebugLogs = true;
@@ -28,23 +34,31 @@ public class PlayerSpawnManager : MonoBehaviour
             return;
         }
         
+        // Shop'a mı giriliyor kontrol et
+        bool enteringShop = PlayerPrefs.GetInt("EnteringShop", 0) == 1;
+        
         // Shop'tan mı dönülüyor kontrol et
         bool shouldRestore = PlayerPrefs.GetInt("ShouldRestorePosition", 0) == 1;
         
-        if (shouldRestore && PlayerPrefs.HasKey("LastPosX"))
+        if (enteringShop)
+        {
+            // Shop'a giriş - Shop içi spawn point'e spawn et
+            SpawnAtShopPosition(player);
+            PlayerPrefs.SetInt("EnteringShop", 0);
+            PlayerPrefs.Save();
+        }
+        else if (shouldRestore && PlayerPrefs.HasKey("LastPosX"))
         {
             // Kaydedilen pozisyona spawn et
             RestorePlayerPosition(player);
+            PlayerPrefs.SetInt("ShouldRestorePosition", 0);
+            PlayerPrefs.Save();
         }
         else
         {
             // Default pozisyona spawn et
             SpawnAtDefaultPosition(player);
         }
-        
-        // Flag'i temizle
-        PlayerPrefs.SetInt("ShouldRestorePosition", 0);
-        PlayerPrefs.Save();
     }
     
     /// <summary>
@@ -98,5 +112,31 @@ public class PlayerSpawnManager : MonoBehaviour
         
         if (showDebugLogs)
             Debug.Log($"[PlayerSpawnManager] Spawned player at default position: {spawnPos}");
+    }
+    
+    /// <summary>
+    /// Player'ı Shop içi pozisyona spawn eder (Shop'a girişte)
+    /// </summary>
+    private void SpawnAtShopPosition(GameObject player)
+    {
+        Vector3 spawnPos = shopSpawnPoint != null 
+            ? shopSpawnPoint.position 
+            : shopSpawnPosition;
+        
+        // CharacterController'ı geçici olarak devre dışı bırak
+        CharacterController cc = player.GetComponent<CharacterController>();
+        if (cc != null)
+        {
+            cc.enabled = false;
+            player.transform.position = spawnPos;
+            cc.enabled = true;
+        }
+        else
+        {
+            player.transform.position = spawnPos;
+        }
+        
+        if (showDebugLogs)
+            Debug.Log($"[PlayerSpawnManager] Spawned player at shop position: {spawnPos}");
     }
 }

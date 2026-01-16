@@ -69,7 +69,7 @@ public class Enemy : MonoBehaviour
     [Tooltip("Player'a saldırma mesafesi")]
     [SerializeField, Min(0.5f)] private float attackRange = 2f;
     [Tooltip("Saldırı hasarı")]
-    [SerializeField, Min(1)] private int attackDamage = 1;
+    [SerializeField, Min(1)] private int attackDamage = 6;
     [Tooltip("Saldırı aralığı (saniye)")]
     [SerializeField, Min(0.5f)] private float attackCooldown = 1.5f;
     

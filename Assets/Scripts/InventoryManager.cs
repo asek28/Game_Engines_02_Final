@@ -17,6 +17,8 @@ public class InventoryManager : MonoBehaviour
     public GameObject itemPrefab;
     public TextMeshProUGUI moneyText;
     public Canvas inventoryCanvas;
+    [Tooltip("Sell All Items button (optional - will be created automatically if null)")]
+    public Button sellAllButton;
     [Tooltip("Parent transform containing ItemSlot GameObjects (e.g., InventorySlots).")]
     public Transform inventorySlotsParent;
     [Tooltip("Optional root panel RectTransform that should stretch to the canvas size.")]
@@ -39,8 +41,9 @@ public class InventoryManager : MonoBehaviour
     [Tooltip("PlayerPrefs key for total earned money (lifetime)")]
     [SerializeField] private string totalEarnedKey = "TotalEarnedMoney";
 
-    private readonly List<ScrapData> collectedScraps = new List<ScrapData>();
-    private readonly Dictionary<string, ItemSlot> itemSlots = new Dictionary<string, ItemSlot>();
+    // Persistent data - scene değişimlerinde korunur
+    private List<ScrapData> collectedScraps = new List<ScrapData>();
+    private Dictionary<string, ItemSlot> itemSlots = new Dictionary<string, ItemSlot>();
     private bool isInventoryVisible = true;
     private float cachedTimeScale = 1f;
     [SerializeField] private bool pauseWhenOpen = true;
@@ -75,10 +78,39 @@ public class InventoryManager : MonoBehaviour
         NotifyMoneyChanged();
         RefreshInventoryUI();
 
+        // Sell All Items button'unu oluştur veya bağla
+        SetupSellAllButton();
+
         SetInventoryVisibility(false, true);
 
         // Gün döngüsü eventini dinle
         DayNightCycle.OnDayComplete += OnDayComplete;
+    }
+    
+    /// <summary>
+    /// Sell All Items button'una event bağlar (Unity Editor'da manuel eklenen button için)
+    /// </summary>
+    private void SetupSellAllButton()
+    {
+        // Eğer button atanmışsa, event'i bağla
+        if (sellAllButton != null)
+        {
+            sellAllButton.onClick.RemoveAllListeners();
+            sellAllButton.onClick.AddListener(OnSellAllButtonClicked);
+            Debug.Log("[InventoryManager] ✅ Sell All Items button event connected.");
+        }
+        else
+        {
+            Debug.LogWarning("[InventoryManager] ⚠️ Sell All Items button is not assigned in the Inspector. Please add a button and assign it to 'Sell All Button' field.");
+        }
+    }
+    
+    /// <summary>
+    /// Sell All Items button'una tıklandığında çağrılır
+    /// </summary>
+    private void OnSellAllButtonClicked()
+    {
+        SellAllScraps();
     }
     
     private void OnApplicationQuit()
@@ -399,36 +431,32 @@ public class InventoryManager : MonoBehaviour
 
     /// <summary>
     /// Tüm scrapleri sat ve money'ye ekle
-    /// ItemId'ye göre sabit fiyatlar: scrap_value5 = 5$, scrap_value10 = 10$
+    /// collectedScraps listesindeki tüm itemların value değerine göre para ekler
     /// </summary>
     public void SellAllScraps()
     {
-        int totalEarnings = 0;
-
-        // ItemSlot'lardan count'ları al ve itemId'ye göre fiyat hesapla
-        foreach (KeyValuePair<string, ItemSlot> kvp in itemSlots)
+        if (collectedScraps == null || collectedScraps.Count == 0)
         {
-            string itemId = kvp.Key;
-            ItemSlot slot = kvp.Value;
-
-            if (slot == null)
-            {
-                continue;
-            }
-
-            int count = slot.GetCount();
-            if (count <= 0)
-            {
-                continue;
-            }
-
-            // ItemId'ye göre fiyat belirle
-            int pricePerUnit = GetScrapPrice(itemId);
-            int earnings = count * pricePerUnit;
-            totalEarnings += earnings;
+            Debug.Log("[InventoryManager] No items to sell.");
+            return;
         }
 
+        int totalEarnings = 0;
+        int itemCount = collectedScraps.Count;
+
+        // Tüm scrapleri value değerine göre topla
+        foreach (ScrapData scrap in collectedScraps)
+        {
+            totalEarnings += scrap.value;
+        }
+
+        // Para ekle
         AddMoney(totalEarnings);
+
+        // Inventory'yi temizle
+        ClearInventory();
+
+        Debug.Log($"[InventoryManager] ✅ Sold {itemCount} items for ${totalEarnings} total.");
     }
 
     /// <summary>
@@ -523,7 +551,7 @@ public class InventoryManager : MonoBehaviour
         // Tüm ItemSlot count'larını sıfırla
         foreach (ItemSlot slot in itemSlots.Values)
         {
-            if (slot != null)
+            if (slot != null && slot.gameObject != null)
             {
                 slot.SetCount(0);
             }
@@ -626,6 +654,12 @@ public class InventoryManager : MonoBehaviour
         if (inventoryCanvas != null)
         {
             inventoryCanvas.enabled = visible;
+        }
+
+        // Sell All button'unu da görünürlüğe göre ayarla
+        if (sellAllButton != null)
+        {
+            sellAllButton.gameObject.SetActive(visible);
         }
 
         ApplyPauseState(visible);

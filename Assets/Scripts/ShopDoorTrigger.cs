@@ -202,8 +202,11 @@ public class ShopDoorTrigger : MonoBehaviour
             PlayerPrefs.SetFloat("LastPosY", player.transform.position.y);
             PlayerPrefs.SetFloat("LastPosZ", player.transform.position.z);
             PlayerPrefs.SetString("LastScene", SceneManager.GetActiveScene().name);
-            PlayerPrefs.Save();
         }
+        
+        // Shop'a giriş flag'ini set et (PlayerSpawnManager Shop içi spawn point'e spawn edecek)
+        PlayerPrefs.SetInt("EnteringShop", 1);
+        PlayerPrefs.Save();
         
         // Shop sahnesini yükle
         SceneManager.LoadScene(shopSceneName);

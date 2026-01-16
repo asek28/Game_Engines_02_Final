@@ -159,6 +159,9 @@ public class PlayerUnarmedAttack : MonoBehaviour
                 
                 enemy.TakeDamage(unarmedDamage, hitPoint, knockbackDir);
                 
+                // Açlık azalt (enemy'ye hasar verildiğinde)
+                NotifyEnemyHit();
+                
                 Debug.Log($"<color=green>✅ [PlayerUnarmedAttack] HIT ENEMY! Dealt {unarmedDamage} damage to {enemy.name}! Health: {enemy.GetCurrentHealth()}/{enemy.GetMaxHealth()}</color>");
                 
                 hitEnemy = true;
@@ -220,5 +223,17 @@ public class PlayerUnarmedAttack : MonoBehaviour
         // Karakterden attack center'a çizgi
         Gizmos.color = Color.yellow;
         Gizmos.DrawLine(transform.position + Vector3.up * 1f, attackCenter);
+    }
+    
+    /// <summary>
+    /// Enemy'ye hasar verildiğinde HungerThirstManager'a bildir
+    /// </summary>
+    private void NotifyEnemyHit()
+    {
+        HungerThirstManager hungerThirstManager = FindFirstObjectByType<HungerThirstManager>();
+        if (hungerThirstManager != null)
+        {
+            hungerThirstManager.OnEnemyHit();
+        }
     }
 }

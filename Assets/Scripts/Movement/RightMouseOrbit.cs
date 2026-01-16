@@ -207,6 +207,30 @@ public class RightMouseOrbit : MonoBehaviour
 		{
 			return;
 		}
+		
+		// Shop Canvas açıksa kamera kontrolü yapma
+		ShopTrigger shopTrigger = FindFirstObjectByType<ShopTrigger>();
+		if (shopTrigger != null)
+		{
+			GameObject shopCanvas = shopTrigger.GetShopCanvas();
+			if (shopCanvas != null && shopCanvas.activeSelf)
+			{
+				return;
+			}
+		}
+		
+		// Death Canvas açıksa kamera kontrolü yapma
+		DeathScreenUI deathScreen = FindFirstObjectByType<DeathScreenUI>();
+		if (deathScreen != null && deathScreen.IsDeathScreenActive())
+		{
+			return;
+		}
+		
+		// Time.timeScale = 0 ise kamera kontrolü yapma
+		if (Time.timeScale <= 0f)
+		{
+			return;
+		}
 
 		var mouse = Mouse.current;
 		if (mouse == null) return;

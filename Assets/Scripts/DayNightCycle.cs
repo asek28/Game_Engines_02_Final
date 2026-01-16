@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class DayNightCycle : MonoBehaviour
 {
@@ -42,6 +43,8 @@ public class DayNightCycle : MonoBehaviour
 
     private float currentTime = 0f;
     private bool isInitialized = false;
+    private bool isRainManuallyToggled = false; // R tuşu ile manuel kontrol için
+    private bool isRainActive = false; // Yağmurun aktif olup olmadığını takip eder
 
     private void Awake()
     {
@@ -148,6 +151,9 @@ public class DayNightCycle : MonoBehaviour
         // Güneş rotasyonunu güncelle
         float normalizedTime = currentTime / dayDuration; // 0.0 - 1.0 arası
         UpdateSunRotation(normalizedTime);
+
+        // R tuşu ile yağmur efektini toggle et
+        CheckRainToggleInput();
     }
 
     private void UpdateSunRotation(float normalizedTime)
@@ -232,8 +238,16 @@ public class DayNightCycle : MonoBehaviour
             return;
         }
 
+        // Manuel toggle aktifse otomatik sistemi kullanma
+        if (isRainManuallyToggled)
+        {
+            rainEffect.SetActive(isRainActive);
+            return;
+        }
+
         // 4 günde bir yağmur yağacak (gün 4, 8, 12, 16, ...)
         bool shouldRain = (currentDay % rainInterval == 0);
+        isRainActive = shouldRain;
         
         rainEffect.SetActive(shouldRain);
         
@@ -244,6 +258,45 @@ public class DayNightCycle : MonoBehaviour
         else
         {
             Debug.Log($"[DayNightCycle] Day {currentDay}: Rain effect deactivated.");
+        }
+    }
+
+    /// <summary>
+    /// R tuşu ile yağmur efektini toggle eder
+    /// </summary>
+    private void CheckRainToggleInput()
+    {
+        if (rainEffect == null)
+        {
+            return;
+        }
+
+        // Unity Input System kullanarak R tuşunu kontrol et
+        bool rKeyPressed = false;
+        
+        var keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            rKeyPressed = keyboard.rKey.wasPressedThisFrame;
+        }
+
+        if (rKeyPressed)
+        {
+            // Manuel toggle modunu aktif et
+            isRainManuallyToggled = true;
+            
+            // Durumu toggle et
+            isRainActive = !isRainActive;
+            rainEffect.SetActive(isRainActive);
+            
+            if (isRainActive)
+            {
+                Debug.Log("[DayNightCycle] Rain effect manually activated (R key)!");
+            }
+            else
+            {
+                Debug.Log("[DayNightCycle] Rain effect manually deactivated (R key).");
+            }
         }
     }
 

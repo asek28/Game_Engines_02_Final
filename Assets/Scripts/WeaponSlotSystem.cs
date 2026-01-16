@@ -25,8 +25,41 @@ public class WeaponSlotSystem : MonoBehaviour
     
     private void Start()
     {
-        // Başlangıçta varsayılan slot'u aktif et
-        SwitchToSlot(defaultSlot);
+        // Başlangıçta tüm silahları pasif yap (satın alınmadan kullanılamaz)
+        DeactivateAllWeapons();
+        
+        // Başlangıçta varsayılan slot'u aktif et (eğer silah varsa)
+        if (GetWeaponObjectForSlot(defaultSlot) != null)
+        {
+            SwitchToSlot(defaultSlot);
+        }
+        else
+        {
+            // Hiç silah yoksa, currentWeapon null olarak başla
+            currentWeapon = null;
+            Debug.Log("[WeaponSlotSystem] No weapons available at start. Buy weapons from shop!");
+        }
+    }
+    
+    /// <summary>
+    /// Tüm silahları pasif yap (oyun başında)
+    /// </summary>
+    private void DeactivateAllWeapons()
+    {
+        if (weaponSlot1 != null)
+        {
+            weaponSlot1.SetActive(false);
+        }
+        
+        if (weaponSlot2 != null)
+        {
+            weaponSlot2.SetActive(false);
+        }
+        
+        if (weaponSlot3 != null)
+        {
+            weaponSlot3.SetActive(false);
+        }
     }
     
     private void Update()
@@ -158,10 +191,16 @@ public class WeaponSlotSystem : MonoBehaviour
     }
     
     /// <summary>
-    /// Slot'a silah ata (Inventory UI'dan çağrılacak)
+    /// Slot'a silah ata (Inventory UI'dan veya Shop'tan çağrılacak)
     /// </summary>
     public void AssignWeaponToSlot(int slotNumber, GameObject weaponObject)
     {
+        if (weaponObject == null)
+        {
+            Debug.LogWarning($"[WeaponSlotSystem] Cannot assign null weapon to slot {slotNumber}");
+            return;
+        }
+        
         switch (slotNumber)
         {
             case 1:
@@ -175,12 +214,19 @@ public class WeaponSlotSystem : MonoBehaviour
                 break;
         }
         
-        // Eğer şu an bu slot aktifse, yenile
+        // Eğer şu an bu slot aktifse, silahı direkt aktif et ve equip et
         if (slotNumber == currentSlot)
         {
             UnequipCurrentWeapon();
             SwitchToSlot(slotNumber);
         }
+        else
+        {
+            // Aktif değilse, silahı pasif yap (sadece satın alındı ama henüz kullanılmıyor)
+            weaponObject.SetActive(false);
+        }
+        
+        Debug.Log($"[WeaponSlotSystem] ✅ Weapon assigned to slot {slotNumber}: {weaponObject.name}");
     }
     
     /// <summary>

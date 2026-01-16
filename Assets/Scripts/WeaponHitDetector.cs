@@ -106,6 +106,9 @@ public class WeaponHitDetector : MonoBehaviour
                 enemy.TakeDamage(damage, hitPoint, knockbackDirection);
                 hitEnemy = true;
                 
+                // Açlık azalt (enemy'ye hasar verildiğinde)
+                NotifyEnemyHit();
+                
                 // Debug.Log($"[WeaponHitDetector] {name}: Hit enemy {enemy.name} for {damage} damage!"); // Gereksiz log
             }
         }
@@ -125,6 +128,9 @@ public class WeaponHitDetector : MonoBehaviour
                 
                 enemyAI.TakeDamage(damage, hitPoint, knockbackDirection);
                 hitEnemy = true;
+                
+                // Açlık azalt (enemy'ye hasar verildiğinde)
+                NotifyEnemyHit();
                 
                 // Debug.Log($"[WeaponHitDetector] {name}: Hit enemy AI {enemyAI.name} for {damage} damage!"); // Gereksiz log
             }
@@ -316,6 +322,18 @@ public class WeaponHitDetector : MonoBehaviour
         if (animatedBox != null && animatedBoxesInRange.Contains(animatedBox))
         {
             animatedBoxesInRange.Remove(animatedBox);
+        }
+    }
+    
+    /// <summary>
+    /// Enemy'ye hasar verildiğinde HungerThirstManager'a bildir
+    /// </summary>
+    private void NotifyEnemyHit()
+    {
+        HungerThirstManager hungerThirstManager = FindFirstObjectByType<HungerThirstManager>();
+        if (hungerThirstManager != null)
+        {
+            hungerThirstManager.OnEnemyHit();
         }
     }
 }
